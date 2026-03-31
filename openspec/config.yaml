@@ -1,0 +1,35 @@
+schema: spec-driven
+
+context: |
+  Project: Reins - AI coding agent constraint governance tool
+  Tech stack: TypeScript, Node.js, Commander.js CLI
+  Package manager: pnpm
+  Build: tsc
+  Test: vitest
+  Form factor: npm CLI tool (npx @reins/cli init)
+
+  Core workflow: Scan project → Generate constraints → Multi-format output → Enforce via hooks → Validate → Learn → Evolve
+
+  9 modules: CLI+State, Scanner, Constraint Generator, Context Generator, Hook System, Pipeline Runner, Evaluation, Self-Improving, Knowledge System
+
+  Design docs: /modules/00-overview.md through /modules/09-knowledge-system.md
+
+  Conventions:
+  - Constraint severity: critical / important / helpful
+  - Context layers: L0 (CLAUDE.md <50 lines) / L1 (AGENTS.md <30 lines) / L2 (.reins/patterns/)
+  - Hook modes: block / warn / off
+  - All config in .reins/ directory within target projects
+
+rules:
+  proposal:
+    - Reference specific module design doc (modules/0X-*.md)
+    - Include phase number (MVP / Phase 2-5) and dependency on prior changes
+    - Keep scope focused - one change per logical unit
+  design:
+    - Include key TypeScript interfaces from the module design doc
+    - Show file structure for source code to be created
+    - Reference constraints.yaml schema where applicable
+  tasks:
+    - Break into testable chunks (each task should produce verifiable output)
+    - Include specific file paths to create
+    - Include test requirements for each task

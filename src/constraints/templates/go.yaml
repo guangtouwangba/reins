@@ -1,0 +1,24 @@
+constraints:
+  - id: "go-error-check"
+    rule: "Always check and handle errors returned by functions; never ignore with _"
+    severity: critical
+    scope: global
+    enforcement:
+      soft: false
+      hook: false
+
+  - id: "go-no-panic"
+    rule: "Do not use panic in library code; return errors instead"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "go-context-first"
+    rule: "Pass context.Context as the first parameter to functions that perform I/O"
+    severity: helpful
+    scope: global
+    enforcement:
+      soft: true
+      hook: false

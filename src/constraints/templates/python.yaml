@@ -1,0 +1,24 @@
+constraints:
+  - id: "py-type-hints"
+    rule: "Add type hints to all function signatures and return types"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "py-no-bare-except"
+    rule: "Never use bare except clauses; always specify the exception type"
+    severity: critical
+    scope: global
+    enforcement:
+      soft: false
+      hook: false
+
+  - id: "py-no-mutable-defaults"
+    rule: "Do not use mutable default arguments in function definitions"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false

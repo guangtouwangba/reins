@@ -1,0 +1,16 @@
+constraints:
+  - id: "rust-no-unwrap"
+    rule: "Avoid using .unwrap() in production code; use proper error propagation with ?"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "rust-error-propagation"
+    rule: "Use the ? operator and Result types for error propagation instead of panicking"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false

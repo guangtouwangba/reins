@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Tool configs (local)
+.agent/
+.codex/
+.crush/
+.omc/
+
+# Reins local files (in target projects)
+.reins/config.local.yaml
+.reins/manifest.json
+.reins/context.json
+.reins/snapshots/
+.reins/logs/
+.reins/knowledge/archive/
+.reins/skills/auto/

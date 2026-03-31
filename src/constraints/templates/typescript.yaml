@@ -1,0 +1,49 @@
+constraints:
+  - id: "ts-strict"
+    rule: "Enable TypeScript strict mode in tsconfig.json"
+    severity: important
+    scope: global
+    condition: "existingRules.typeCheck !== true"
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "ts-no-any"
+    rule: "Avoid using the any type; prefer unknown or proper types"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "ts-return-types"
+    rule: "Annotate return types on all exported functions"
+    severity: helpful
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "ts-no-implicit-any"
+    rule: "Do not allow implicit any; all variables must be typed"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "ts-prefer-const"
+    rule: "Prefer const over let for variables that are not reassigned"
+    severity: helpful
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "ts-error-handling"
+    rule: "Use typed error objects instead of catching unknown in try/catch blocks"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false

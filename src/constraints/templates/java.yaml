@@ -1,0 +1,16 @@
+constraints:
+  - id: "java-checked-exceptions"
+    rule: "Declare checked exceptions in method signatures or wrap in unchecked exceptions with context"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
+
+  - id: "java-no-raw-types"
+    rule: "Do not use raw generic types; always specify type parameters"
+    severity: important
+    scope: global
+    enforcement:
+      soft: true
+      hook: false
