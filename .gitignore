@@ -1,14 +1,28 @@
 node_modules/
 dist/
 *.tsbuildinfo
+coverage/
+*.log
+*.pid
+*.tmp
+
+# OS files
+.DS_Store
 
 # Tool configs (local)
 .agent/
+.claude/
 .codex/
 .crush/
 .omc/
+.omx/
+.opencode/
+.vscode/
+.idea/
+.zed/
 
 # Reins local files (in target projects)
+.reins/
 .reins/config.local.yaml
 .reins/manifest.json
 .reins/context.json
@@ -16,3 +30,8 @@ dist/
 .reins/logs/
 .reins/knowledge/archive/
 .reins/skills/auto/
+
+# Environment files
+.env
+.env.local
+.env.*.local
