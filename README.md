@@ -292,6 +292,10 @@ Detailed module design specs in `modules/`:
 | [08-self-improving.md](modules/08-self-improving.md) | Self-improving loop |
 | [09-knowledge-system.md](modules/09-knowledge-system.md) | Knowledge system (capture, retrieval, graduation) |
 
+Supplementary runtime notes:
+
+- [docs/user-requirement-runtime-sequence.md](docs/user-requirement-runtime-sequence.md): How a user requirement actually flows through the current system
+
 ---
 
 ## License

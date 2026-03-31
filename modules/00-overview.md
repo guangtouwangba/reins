@@ -166,3 +166,7 @@ reins/
 | [07-evaluation.md](07-evaluation.md) | ⑦ Evaluation System 评估系统 |
 | [08-self-improving.md](08-self-improving.md) | ⑧ Self-Improving 自进化闭环 |
 | [09-knowledge-system.md](09-knowledge-system.md) | ⑨ Knowledge System 隐式知识系统 |
+
+补充运行时文稿：
+
+- [../docs/user-requirement-runtime-sequence.md](../docs/user-requirement-runtime-sequence.md)：当前版本中“用户输入需求后系统如何运行”的真实时序说明
