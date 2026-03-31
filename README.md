@@ -1,273 +1,296 @@
 # Reins
 
+**Constraint governance for AI coding agents** — scan your project, generate constraints, enforce via hooks, capture knowledge, evolve continuously.
+
 **AI 编码代理约束治理工具** — 扫描项目、生成约束、强制执行、知识沉淀、持续进化。
 
 ---
 
-## 核心问题
+## The Problem
 
-Claude Code、Cursor、Copilot 等 AI 编码代理共同面临一个问题：它们不了解你的项目。
+AI coding agents (Claude Code, Cursor, Copilot) share a fundamental gap: they don't know your project.
 
-它们不知道：
-- 这个项目用 Prisma，不用原生 SQL
-- `payment` 模块改动需要同步更新 webhook handler
-- 错误处理统一用 `Result` 类型，不用 try-catch
-- Edge Runtime 不能用标准 Prisma client
+They don't know:
+- This project uses Prisma, not raw SQL
+- Changing `payment` requires syncing the webhook handler
+- Error handling uses the `Result` type, not try-catch
+- Edge Runtime can't use the standard Prisma client
 
-每次新 session 开始，agent 都从零出发。每次都在重复犯同样的错误。
+Every new session starts from zero. The same mistakes repeat.
 
-Reins 解决这个问题。它扫描你的项目，提取约束，生成多格式上下文文件，并通过 Hook 强制执行——同时在每次任务结束后捕获新的项目知识，让约束随项目一起进化。
+**Reins fixes this.** It scans your project, extracts constraints, generates multi-format context files, enforces them via hooks — and captures new knowledge after each task so constraints evolve with your project.
 
----
-
-## 工作原理
-
-```
-扫描项目
-   ↓
-生成 constraints.yaml（项目约束定义）
-   ↓
-多格式输出：CLAUDE.md / AGENTS.md / .cursorrules / copilot-instructions.md
-   ↓
-Hook 强制执行（PreToolUse / PostToolUse / Stop）
-   ↓
-任务结束后知识沉淀（捕获耦合、踩坑、决策、偏好）
-   ↓
-高置信度知识毕业为正式约束 → 反馈到 constraints.yaml
-```
+> AI 编码代理（Claude Code、Cursor、Copilot）的共同问题：不了解你的项目。每次新 session 从零开始，反复犯同样的错。Reins 扫描项目、提取约束、通过 Hook 强制执行，并在每次任务后捕获新知识，让约束随项目进化。
 
 ---
 
-## 快速开始
+## How It Works
+
+```
+Scan project
+   ↓
+Generate constraints.yaml (project constraint definitions)
+   ↓
+Multi-format output: CLAUDE.md / AGENTS.md / .cursorrules / copilot-instructions.md
+   ↓
+Hook enforcement (PreToolUse / PostToolUse / Stop)
+   ↓
+Post-task knowledge capture (couplings, gotchas, decisions, preferences)
+   ↓
+High-confidence knowledge graduates to formal constraints → feedback to constraints.yaml
+```
+
+---
+
+## Quick Start
 
 ```bash
+# Initialize project constraints
 # 初始化项目约束
 npx reins init
 
-# 预览将生成的文件，不实际写入
+# Preview without writing files
+# 预览，不写文件
 npx reins init --dry-run
 
-# 仅生成 L0 层（顶层 CLAUDE.md）
+# Generate only L0 (top-level CLAUDE.md)
+# 仅生成顶层 CLAUDE.md
 npx reins init --depth L0
 ```
 
-`reins init` 执行后，项目根目录生成：
+After `reins init`, your project gets:
 
 ```
 your-project/
-├── CLAUDE.md                        # L0：全局地图 + 核心约束
+├── CLAUDE.md                        # L0: global map + critical constraints
 ├── app/
-│   └── AGENTS.md                    # L1：目录级约束
+│   └── AGENTS.md                    # L1: directory-level constraints
 ├── lib/
-│   └── AGENTS.md                    # L1：目录级约束
-├── .cursorrules                     # Cursor 格式
-├── .github/copilot-instructions.md  # GitHub Copilot 格式
-├── .windsurfrules                   # Windsurf 格式
+│   └── AGENTS.md                    # L1: directory-level constraints
+├── .cursorrules                     # Cursor format
+├── .github/copilot-instructions.md  # GitHub Copilot format
+├── .windsurfrules                   # Windsurf format
 ├── .claude/
-│   └── settings.json                # Hook 配置
+│   └── settings.json                # Hook configuration
 └── .reins/
-    ├── constraints.yaml             # 约束定义（团队共享）
-    ├── config.yaml                  # Reins 元配置
-    ├── verification.yaml            # 验证配方
-    ├── hooks/                       # Hook 脚本
-    ├── patterns/                    # L2 模式参考文件
-    └── knowledge/                   # 隐式知识库
+    ├── constraints.yaml             # Constraint definitions (team-shared)
+    ├── config.yaml                  # Reins meta-configuration
+    ├── verification.yaml            # Verification recipe
+    ├── hooks/                       # Hook scripts
+    ├── patterns/                    # L2 pattern reference files
+    └── knowledge/                   # Implicit knowledge base
 ```
 
 ---
 
-## 核心特性
+## Core Features
 
-### ① CLI + State — 入口与状态管理
+### ① CLI + State — Entry Point & State Management
 
-统一命令入口，管理约束生命周期（init → develop → update → rollback）。状态快照支持任意时间点回滚。
+Unified command entry, manages constraint lifecycle (init → develop → update → rollback). Snapshot-based state enables rollback to any point in time.
 
-### ② Scanner — 代码库探索器
+> 统一命令入口，管理约束生命周期。状态快照支持任意时间点回滚。
 
-分析目录结构、依赖、框架特征，生成 `context.json` 和 `manifest.json`，作为后续约束生成的输入。
+### ② Scanner — Codebase Explorer
 
-### ③ Constraint Generator — 约束生成器
+Analyzes directory structure, dependencies, and framework characteristics. Outputs `context.json` and `manifest.json` as input for constraint generation. Supports 6 scan depths (L0-L5).
 
-消费 Scanner 输出，推断项目约束，写入 `constraints.yaml`。支持多个约束 Profile（如 `strict` / `default` / `review`）。
+> 分析目录结构、依赖、框架特征，生成结构化上下文，支持 6 层扫描深度。
 
-### ④ Progressive Context Generator — 渐进式上下文生成器
+### ③ Constraint Generator
 
-将 `constraints.yaml` 渲染为多格式上下文文件。三层模型（L0/L1/L2）控制信息密度，避免 context 浪费。
+Consumes Scanner output, infers project constraints, writes `constraints.yaml`. Supports multiple profiles (`strict` / `default` / `relaxed` / `ci`) and tech stack templates (TypeScript, Python, Go, Rust, Java).
 
-### ⑤ Hook System — Hook 系统
+> 消费 Scanner 输出，推断约束，支持多 Profile 和技术栈模板。
 
-生成 Claude Code Hook 脚本（`UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `Stop`），在 agent 操作前后强制验证约束。
+### ④ Progressive Context Generator
 
-### ⑥ Pipeline Runner — 流水线运行器
+Renders `constraints.yaml` into multi-format context files. The three-layer model (L0/L1/L2) controls information density — agents get exactly what they need, nothing more.
 
-`reins develop <task>` 驱动完整开发流水线：约束注入 → 代码生成 → 验证 → 评估，确保每个阶段都在约束下运行。
+> 渐进式三层模型控制信息密度，避免 context 浪费。
 
-### ⑦ Evaluation System — 评估系统
+### ⑤ Hook System
 
-消费 `verification.yaml`，驱动多层验证（lint、test、类型检查、自定义脚本），收集执行结果用于自进化分析。
+Generates Claude Code hook scripts (`UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `Stop`). Enforces constraints deterministically before and after agent operations. Three modes: `block` / `warn` / `off`.
 
-### ⑧ Self-Improving — 自进化闭环
+> 生成 Hook 脚本，在 agent 操作前后确定性地验证约束。三种模式：阻止/警告/关闭。
 
-分析执行日志，识别高频错误模式和可优化的约束，自动或建议更新 `constraints.yaml`。
+### ⑥ Pipeline Runner
 
-### ⑨ Knowledge System — 隐式知识系统
+`reins develop <task>` drives the full development pipeline: constraint injection → planning → execution → review → QA. Every stage runs under constraints.
 
-捕获 agent 的"经历"并转化为"经验"。任务完成后触发结构化反思，将耦合关系、踩坑记录、架构决策、用户偏好存入 `.reins/knowledge/`，在下次相关任务时自动注入。高置信度知识可毕业为正式约束。
+> 驱动完整开发流水线，每个阶段都在约束下运行。
+
+### ⑦ Evaluation System
+
+5-layer verification: L0 (static checks) → L1 (coverage gate) → L2 (integration verify) → L3 (E2E) → L4 (semantic review). Profile-based exit conditions for the review loop.
+
+> 五层验证体系，基于 Profile 的退出条件。
+
+### ⑧ Self-Improving Loop
+
+OBSERVE → ANALYZE → LEARN → CONSTRAIN closed loop. Analyzes execution logs, detects recurring error patterns, auto-applies high-confidence improvements (>85%), suggests medium-confidence ones (60-85%).
+
+> 闭环自进化：分析执行日志，识别模式，自动或建议更新约束。
+
+### ⑨ Knowledge System — Implicit Knowledge
+
+Captures agent "experience" and converts it to "expertise". Structured reflection after task completion stores couplings, gotchas, decisions, and preferences into `.reins/knowledge/`. Auto-injected on the next relevant task. High-confidence knowledge graduates to formal constraints.
+
+> 捕获 agent 的"经历"转化为"经验"。任务后结构化反思，下次相关任务自动注入。高置信度知识毕业为正式约束。
 
 ---
 
-## 命令列表
+## Commands
 
-| 命令 | 说明 |
-|------|------|
-| `reins init` | 扫描项目，生成约束和上下文文件 |
-| `reins develop <task>` | 在约束下自动执行开发任务 |
-| `reins status` | 查看约束状态和统计信息 |
-| `reins update` | 增量更新约束（基于最新代码扫描） |
-| `reins test` | 测试约束和 Hook 是否正常运行 |
-| `reins rollback` | 回滚到指定快照 |
-| `reins learn` | 保存本次 session 学到的知识 |
-| `reins analyze` | 分析执行历史，输出改进建议 |
-| `reins hook` | 管理 Hook（add / list / disable / fix / promote） |
+| Command | Description |
+|---------|-------------|
+| `reins init` | Scan project, generate constraints and context files |
+| `reins develop <task>` | Auto-develop under constraints |
+| `reins status` | View constraint status and statistics |
+| `reins update` | Incrementally update constraints from latest scan |
+| `reins test` | Test constraints and hooks |
+| `reins rollback` | Rollback to a specific snapshot |
+| `reins learn` | Save knowledge learned from current session |
+| `reins analyze` | Analyze execution history, output improvement suggestions |
+| `reins hook` | Manage hooks (add / list / disable / fix / promote) |
 
 ```bash
-# 常用选项示例
-reins init --dry-run              # 预览，不写文件
-reins init --depth L0             # 只生成顶层 CLAUDE.md
-reins init --force                # 覆盖已有 .reins/ 配置
-reins develop "add user login"    # 约束下执行开发任务
-reins status --format json        # JSON 格式输出状态
-reins update --auto-apply         # 自动应用高置信度更新
-reins rollback --to <snapshot>    # 回滚到指定快照
-reins learn --auto                # 全自动 OBSERVE → ANALYZE → LEARN 流水线
+reins init --dry-run              # Preview, no file writes
+reins init --depth L0             # Only generate top-level CLAUDE.md
+reins init --force                # Overwrite existing .reins/ config
+reins develop "add user login"    # Develop under constraints
+reins status --format json        # JSON output
+reins update --auto-apply         # Auto-apply high-confidence updates
+reins rollback --to <snapshot>    # Rollback to snapshot
+reins learn --auto                # Full OBSERVE → ANALYZE → LEARN pipeline
 ```
 
 ---
 
-## 渐进式上下文设计（L0 / L1 / L2）
+## Progressive Context Design (L0 / L1 / L2)
 
-这是 Reins 的核心设计之一。AI agent 的 context window 是稀缺资源，不应该把所有约束一次性塞入。
+An agent's context window is a scarce resource. Don't dump all constraints at once.
+
+> AI agent 的 context window 是稀缺资源，不应把所有约束一次性塞入。
 
 ```
-L0  CLAUDE.md（项目根）
-    始终加载。内容：项目地图、关键命令、3-5 条最重要的全局约束。
-    目标：让 agent 在任何任务开始前都有基本方向感。
-    大小控制：< 50 行。
+L0  CLAUDE.md (project root)
+    Always loaded. Project map, key commands, 3-5 critical global constraints.
+    Goal: basic orientation before any task.
+    Budget: < 50 lines, ~500-800 tokens.
 
-L1  AGENTS.md（各目录）
-    进入目录时自动加载。内容：该目录的约束、模式、禁忌。
-    目标：让 agent 在进入具体模块时获得精准上下文。
-    大小控制：< 30 行/目录。
+L1  AGENTS.md (per directory)
+    Auto-loaded when entering a directory. Directory constraints, patterns, prohibitions.
+    Goal: precise context for the current module.
+    Budget: < 30 lines per directory, ~300-500 tokens.
 
-L2  .reins/patterns/（详细参考）
-    按需读取。内容：完整的模式示例、代码模板、详细规范。
-    目标：agent 需要深入了解时自行查阅，不占用默认 context。
-    大小控制：不限制，但按文件分离。
+L2  .reins/patterns/ (detail reference)
+    On-demand retrieval. Full examples, code templates, detailed specs.
+    Goal: deep reference when agent needs it, never preloaded.
+    Budget: unlimited, file-separated.
 ```
 
-三层结构确保：agent 始终有足够上下文，但不会被无关信息淹没。
+Three layers ensure: agents always have enough context, but are never drowned in irrelevant information.
+
+> 三层结构确保：agent 始终有足够上下文，但不会被无关信息淹没。
 
 ---
 
-## 知识系统（隐式知识捕获与沉淀）
+## Knowledge System
 
-这是 Reins 的另一个核心创新。传统约束是静态的；Reins 的知识系统让约束随项目演进而成长。
+Traditional constraints are static. Reins' knowledge system lets constraints grow with your project.
 
-### 四种知识类型
+> 传统约束是静态的，Reins 让约束随项目演进而成长。
 
-| 类型 | 示例 | 来源 |
-|------|------|------|
-| `coupling`（耦合） | "auth 和 webhook 共享 session store" | 任务完成反思 |
-| `gotcha`（踩坑） | "Prisma 在 Edge Runtime 不能用" | 失败重试 |
-| `decision`（决策） | "选 Redis 因为需要 pub/sub" | 任务完成反思 |
-| `preference`（偏好） | "用户偏好函数式，避免 class" | 用户纠正 |
+### Four Knowledge Types
 
-### 三个捕获触发点
+| Type | Example | Source |
+|------|---------|--------|
+| `coupling` | "auth and webhook share session store" | Post-task reflection |
+| `gotcha` | "Prisma doesn't work in Edge Runtime" | Failure retry |
+| `decision` | "Chose Redis for pub/sub" | Post-task reflection |
+| `preference` | "User prefers functional style, avoid classes" | User correction |
 
-- **任务完成后**：Stop hook 通过后触发结构化反思，agent 总结本次任务中发现的耦合、踩坑、决策
-- **用户纠正时**：检测到否定信号（"不对"、"换个方式"）时，提取"期望差"背后的原则
-- **失败重试后**：hook 拦截或测试失败导致 agent 改变方法时，提取负面知识（"不要在这里这样做"）
+### Three Capture Triggers
 
-### 检索与注入
+- **After task completion**: Stop hook triggers structured reflection — agent summarizes discovered couplings, gotchas, decisions
+- **On user correction**: Detects negation signals ("no", "don't", "wrong") and extracts the principle behind the expectation gap
+- **After failure retry**: When a hook blocks or test fails and agent changes approach, captures negative knowledge ("don't do this here")
 
-知识通过 `UserPromptSubmit` hook 自动注入，采用**文件亲和度（File-Affinity）**检索：根据任务涉及的文件路径匹配相关知识，注入格式为摘要 + 路径（不超过 200 tokens），agent 需要详情时自行读取知识文件。
+> 三个捕获时机：任务完成后反思、用户纠正时提取原则、失败重试后捕获负面知识。
 
-### 知识毕业
+### Retrieval & Injection
+
+Knowledge is auto-injected via `UserPromptSubmit` hook using **file-affinity** retrieval: matches knowledge entries against involved file paths. Injection format is summary + path reference (< 200 tokens). Agent reads full knowledge file when needed.
+
+### Knowledge Graduation
 
 ```
-隐式知识（confidence 50-70）
-    ↓ 多次注入验证
-验证中知识（confidence 70-90）
-    ↓ confidence > 90，注入次数 > 5，成功率 > 80%
-候选约束（提示用户确认）
+Implicit knowledge (confidence 50-70)
+    ↓ validated through multiple injections
+Validated knowledge (confidence 70-90)
+    ↓ confidence > 90, injections > 5, success rate > 80%
+Candidate constraint (prompt user confirmation)
     ↓
-正式约束（写入 constraints.yaml）
+Formal constraint (written to constraints.yaml)
 ```
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 reins/
 ├── src/
-│   ├── cli.ts              # CLI 入口（commander）
-│   ├── commands/           # 各命令实现（init / status / update / rollback 等）
-│   ├── scanner/            # 代码库探索器
-│   ├── constraints/        # 约束生成器
-│   ├── context/            # 渐进式上下文生成器
-│   ├── hooks/              # Hook 系统
-│   ├── pipeline/           # 流水线运行器
-│   ├── evaluation/         # 评估系统
-│   ├── learn/              # 自进化（analyzer + learner）
-│   ├── knowledge/          # 隐式知识系统
-│   ├── adapters/           # 多格式输出（CLAUDE.md / .cursorrules 等）
-│   └── state/              # 状态管理
-├── templates/              # 模板文件
-└── test/                   # 测试
+│   ├── cli.ts              # CLI entry (Commander.js)
+│   ├── commands/           # Command handlers (init / status / update / rollback ...)
+│   ├── scanner/            # Codebase explorer (L0-L5)
+│   ├── constraints/        # Constraint generator + classifier + templates
+│   ├── context/            # Progressive context generator (L0/L1/L2)
+│   ├── hooks/              # Hook generator + settings writer + health monitor
+│   ├── pipeline/           # Pipeline runner + constraint injector + QA
+│   ├── evaluation/         # 5-layer evaluation (L0-L4)
+│   ├── learn/              # Self-improving (observer + analyzer + learner)
+│   ├── knowledge/          # Knowledge system (capture + retrieval + graduation)
+│   ├── adapters/           # Multi-format output (CLAUDE.md / .cursorrules ...)
+│   └── state/              # Config + manifest + snapshot
+├── modules/                # Design documents (10 module specs)
+└── openspec/               # OpenSpec change archive (23 changes)
 ```
 
 ---
 
-## 开发
+## Development
 
 ```bash
-# 安装依赖
-pnpm install
-
-# 构建
-pnpm build
-
-# 开发模式（直接运行 TypeScript）
-pnpm dev -- init --dry-run
-
-# 运行测试
-pnpm test
-
-# 类型检查
-pnpm typecheck
+pnpm install        # Install dependencies
+pnpm build          # Build (tsc strict mode)
+pnpm dev -- init    # Dev mode (tsx, no build needed)
+pnpm test           # Run tests (315 tests, vitest)
+pnpm typecheck      # Type check
 ```
 
-**依赖**：Node.js >= 18，pnpm
+**Requirements**: Node.js >= 18, pnpm
 
 ---
 
-## 设计文档
+## Design Documents
 
-详细的模块设计文档在 `modules/` 目录：
+Detailed module design specs in `modules/`:
 
-| 文档 | 内容 |
-|------|------|
-| [modules/00-overview.md](modules/00-overview.md) | 系统全景、模块依赖、数据流、实施节奏 |
-| [modules/01-cli-state.md](modules/01-cli-state.md) | CLI 入口 + 状态管理 |
-| [modules/02-scanner.md](modules/02-scanner.md) | 代码库探索器 |
-| [modules/03-constraint-generator.md](modules/03-constraint-generator.md) | 约束生成器 |
-| [modules/04-context-generator.md](modules/04-context-generator.md) | 渐进式上下文生成器（L0/L1/L2） |
-| [modules/05-hook-system.md](modules/05-hook-system.md) | Hook 系统 |
-| [modules/06-pipeline-runner.md](modules/06-pipeline-runner.md) | 流水线运行器 |
-| [modules/07-evaluation.md](modules/07-evaluation.md) | 评估系统 |
-| [modules/08-self-improving.md](modules/08-self-improving.md) | 自进化闭环 |
-| [modules/09-knowledge-system.md](modules/09-knowledge-system.md) | 隐式知识系统（捕获、检索、毕业） |
+| Document | Content |
+|----------|---------|
+| [00-overview.md](modules/00-overview.md) | System overview, module dependencies, data flow |
+| [01-cli-state.md](modules/01-cli-state.md) | CLI entry + state management |
+| [02-scanner.md](modules/02-scanner.md) | Codebase explorer |
+| [03-constraint-generator.md](modules/03-constraint-generator.md) | Constraint generator |
+| [04-context-generator.md](modules/04-context-generator.md) | Progressive context (L0/L1/L2) |
+| [05-hook-system.md](modules/05-hook-system.md) | Hook system |
+| [06-pipeline-runner.md](modules/06-pipeline-runner.md) | Pipeline runner |
+| [07-evaluation.md](modules/07-evaluation.md) | Evaluation system |
+| [08-self-improving.md](modules/08-self-improving.md) | Self-improving loop |
+| [09-knowledge-system.md](modules/09-knowledge-system.md) | Knowledge system (capture, retrieval, graduation) |
 
 ---
 
