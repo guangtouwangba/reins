@@ -67,31 +67,31 @@ describe('rule-detector', () => {
 });
 
 describe('pattern-analyzer', () => {
-  it('detects monorepo pattern', () => {
+  it('detects monorepo pattern', async () => {
     const dirs = ['packages', 'packages/core', 'packages/ui'];
     const files = ['package.json', 'packages/core/index.ts'];
-    const result = analyzePatterns(files, dirs);
+    const result = await analyzePatterns(files, dirs);
     expect(result.architecture.pattern).toBe('monorepo');
   });
 
-  it('detects layered pattern', () => {
+  it('detects layered pattern', async () => {
     const dirs = ['src', 'src/api', 'src/service', 'src/repository', 'src/model'];
     const files = ['src/api/routes.ts', 'src/service/user.ts'];
-    const result = analyzePatterns(files, dirs);
+    const result = await analyzePatterns(files, dirs);
     expect(result.architecture.pattern).toBe('layered');
   });
 
-  it('detects camelCase naming', () => {
+  it('detects camelCase naming', async () => {
     const files = ['src/userService.ts', 'src/authHelper.ts', 'src/dataStore.ts'];
     const dirs = ['src'];
-    const result = analyzePatterns(files, dirs);
+    const result = await analyzePatterns(files, dirs);
     expect(result.conventions.naming).toBe('camelCase');
   });
 
-  it('detects kebab-case naming', () => {
+  it('detects kebab-case naming', async () => {
     const files = ['src/user-service.ts', 'src/auth-helper.ts', 'src/data-store.ts'];
     const dirs = ['src'];
-    const result = analyzePatterns(files, dirs);
+    const result = await analyzePatterns(files, dirs);
     expect(result.conventions.naming).toBe('kebab-case');
   });
 });

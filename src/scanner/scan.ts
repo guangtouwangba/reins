@@ -67,7 +67,7 @@ export async function scan(
 
   // L2: pattern analysis
   if (depth === 'L0-L2') {
-    const patterns = analyzePatterns(filePaths, dirPaths);
+    const patterns = await analyzePatterns(filePaths, dirPaths, projectRoot);
     mergePartial(context.architecture, patterns.architecture);
     mergePartial(context.conventions, patterns.conventions);
   }

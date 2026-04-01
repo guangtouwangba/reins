@@ -1,15 +1,52 @@
 import type { ArchitectureInfo, ConventionsInfo } from './types.js';
+import { buildProjectIndex, saveProjectIndex, loadProjectIndex } from '../ast/project-index.js';
 
 export interface PatternResult {
   architecture: Partial<ArchitectureInfo>;
   conventions: Partial<ConventionsInfo>;
 }
 
-export function analyzePatterns(filePaths: string[], dirPaths: string[]): PatternResult {
-  return {
+export async function analyzePatterns(
+  filePaths: string[],
+  dirPaths: string[],
+  projectRoot?: string,
+): Promise<PatternResult> {
+  const result: PatternResult = {
     architecture: inferArchitecture(dirPaths, filePaths),
-    conventions: inferConventions(filePaths, dirPaths),
+    conventions: {},
   };
+
+  // If projectRoot provided, use AST analysis
+  if (projectRoot) {
+    try {
+      const existingIndex = loadProjectIndex(projectRoot);
+      const index = await buildProjectIndex(projectRoot, filePaths, existingIndex ?? undefined);
+      saveProjectIndex(projectRoot, index);
+
+      // Derive conventions from full-repo index
+      const agg = index.aggregated;
+
+      // Naming style from AST
+      const namingEntries = Object.entries(agg.namingStyle);
+      if (namingEntries.length > 0) {
+        const dominant = namingEntries.sort((a, b) => b[1] - a[1])[0]![0];
+        result.conventions.naming = dominant as ConventionsInfo['naming'];
+      }
+
+      // File structure (keep existing logic for non-AST fields)
+      result.conventions = {
+        ...result.conventions,
+        ...inferConventions(filePaths, dirPaths),
+      };
+    } catch {
+      // AST analysis failed, fall back to regex
+      result.conventions = inferConventions(filePaths, dirPaths);
+    }
+  } else {
+    result.conventions = inferConventions(filePaths, dirPaths);
+  }
+
+  return result;
 }
 
 function inferArchitecture(dirs: string[], files: string[]): Partial<ArchitectureInfo> {

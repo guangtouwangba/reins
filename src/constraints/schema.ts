@@ -10,6 +10,7 @@ export interface ConstraintEnforcement {
   hook_type?: HookType;
   hook_mode?: HookMode;
   hook_check?: string;
+  ast_pattern?: string;
 }
 
 export interface Constraint {

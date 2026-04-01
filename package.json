@@ -16,8 +16,20 @@
   },
   "dependencies": {
     "commander": "^13.1.0",
+    "glob": "^11.0.2",
     "js-yaml": "^4.1.0",
-    "glob": "^11.0.2"
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.26.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "tree-sitter-javascript",
+      "tree-sitter-python",
+      "tree-sitter-typescript",
+      "esbuild"
+    ]
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
