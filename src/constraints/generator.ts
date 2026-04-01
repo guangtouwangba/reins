@@ -277,8 +277,13 @@ export function writeConstraintsFile(
       execution: 'default',
       verification: { engine: 'reins', max_iterations: 3 },
       qa: true,
-      pre_commit: [`${pmRun} lint`, `${pmRun} typecheck`],
-      post_develop: [`${pmRun} test`],
+      pre_commit: [
+        ...(context.commands?.lint ? [context.commands.lint.command] : [`${pmRun} lint`]),
+        ...(context.commands?.typecheck ? [context.commands.typecheck.command] : [`${pmRun} typecheck`]),
+      ].filter(Boolean),
+      post_develop: [
+        ...(context.commands?.test ? [context.commands.test.command] : [`${pmRun} test`]),
+      ].filter(Boolean),
     },
     profiles: {
       strict: {

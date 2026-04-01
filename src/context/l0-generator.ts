@@ -7,6 +7,39 @@ const MARKER_START = '<!-- reins-managed -->';
 const MARKER_END = '<!-- /reins-managed -->';
 
 function inferCommands(context: CodebaseContext): string[] {
+  // If command discovery has populated context.commands, use those
+  if (context.commands) {
+    const lines: string[] = [];
+    const labels: Array<{ key: keyof typeof context.commands; label: string }> = [
+      { key: 'install', label: 'Install' },
+      { key: 'dev', label: 'Dev' },
+      { key: 'build', label: 'Build' },
+      { key: 'test', label: 'Test' },
+      { key: 'testSingle', label: 'Test (single)' },
+      { key: 'lint', label: 'Lint' },
+      { key: 'lintFix', label: 'Lint fix' },
+      { key: 'typecheck', label: 'Typecheck' },
+      { key: 'format', label: 'Format' },
+      { key: 'formatCheck', label: 'Format check' },
+      { key: 'clean', label: 'Clean' },
+    ];
+
+    for (const { key, label } of labels) {
+      const cmd = context.commands[key];
+      if (!cmd) continue;
+
+      let annotation = '';
+      if (cmd.source === 'user') annotation = ' (declared)';
+      else if (cmd.source === 'docs') annotation = ' (from docs)';
+      if (cmd.confidence < 0.7) annotation = ' (may need adjustment)';
+
+      lines.push(`- **${label}**: \`${cmd.command}\`${annotation}`);
+    }
+
+    if (lines.length > 0) return lines;
+  }
+
+  // Fallback: infer from package manager
   const pm = context.stack.packageManager || 'npm';
   const run = pm === 'npm' ? 'npm run' : pm === 'yarn' ? 'yarn' : `${pm} run`;
   const lines: string[] = [];

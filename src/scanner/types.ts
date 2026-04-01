@@ -60,6 +60,41 @@ export interface KeyFilesInfo {
   lockfile: string | null;
 }
 
+export interface ResolvedCommand {
+  command: string;
+  source: 'script' | 'convention' | 'taskrunner' | 'docs' | 'skill' | 'user';
+  confidence: number; // 0-1
+}
+
+export interface CommandMap {
+  install: ResolvedCommand | null;
+  dev: ResolvedCommand | null;
+  build: ResolvedCommand | null;
+  lint: ResolvedCommand | null;
+  lintFix: ResolvedCommand | null;
+  test: ResolvedCommand | null;
+  testSingle: ResolvedCommand | null;
+  typecheck: ResolvedCommand | null;
+  format: ResolvedCommand | null;
+  formatCheck: ResolvedCommand | null;
+  clean: ResolvedCommand | null;
+}
+
+export interface PackageInfo {
+  name: string;
+  path: string;
+  stack: Partial<StackInfo>;
+  commands: CommandMap;
+}
+
+export function emptyCommandMap(): CommandMap {
+  return {
+    install: null, dev: null, build: null, lint: null, lintFix: null,
+    test: null, testSingle: null, typecheck: null, format: null,
+    formatCheck: null, clean: null,
+  };
+}
+
 export interface CodebaseContext {
   stack: StackInfo;
   architecture: ArchitectureInfo;
@@ -71,6 +106,8 @@ export interface CodebaseContext {
     files: FileEntry[];
   };
   keyFiles: KeyFilesInfo;
+  commands: CommandMap;
+  packages: PackageInfo[];
 }
 
 export function emptyCodebaseContext(): CodebaseContext {
@@ -82,5 +119,7 @@ export function emptyCodebaseContext(): CodebaseContext {
     testing: { framework: '', pattern: '', coverage: null, fixtures: [] },
     structure: { directories: [], files: [] },
     keyFiles: { readme: null, contributing: null, changelog: null, lockfile: null },
+    commands: emptyCommandMap(),
+    packages: [],
   };
 }

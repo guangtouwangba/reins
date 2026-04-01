@@ -1,11 +1,15 @@
 import type { CodebaseContext } from './types.js';
 import type { ReinsConfig } from '../state/config.js';
-import { emptyCodebaseContext } from './types.js';
+import { emptyCodebaseContext, emptyCommandMap } from './types.js';
 import { scanDirectory } from './directory-scanner.js';
 import { detectStack } from './stack-detector.js';
 import { detectTests } from './test-detector.js';
 import { detectRules } from './rule-detector.js';
 import { analyzePatterns } from './pattern-analyzer.js';
+import { detectWorkspaces } from './workspace-detector.js';
+import { resolveCommands, mergeCommands } from './command-resolver.js';
+import { extractCommandsFromDocs } from './doc-extractor.js';
+import { loadUserCommands } from './user-commands.js';
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -67,6 +71,26 @@ export async function scan(
     mergePartial(context.architecture, patterns.architecture);
     mergePartial(context.conventions, patterns.conventions);
   }
+
+  // Command discovery
+  const packageManager = context.stack.packageManager || 'npm';
+  const scriptCmds = resolveCommands(projectRoot, packageManager);
+  const docCmds = extractCommandsFromDocs(projectRoot);
+  const userCmds = loadUserCommands(projectRoot);
+  // Priority: user > script > docs
+  context.commands = mergeCommands(emptyCommandMap(), docCmds, scriptCmds, userCmds);
+
+  // Workspace detection
+  const packages = detectWorkspaces(projectRoot);
+  context.packages = packages.map(pkg => ({
+    name: pkg.name,
+    path: pkg.path,
+    stack: {},
+    commands: mergeCommands(
+      emptyCommandMap(),
+      resolveCommands(join(projectRoot, pkg.path), packageManager),
+    ),
+  }));
 
   // Write output artifacts
   if (!options?.dryRun) {
