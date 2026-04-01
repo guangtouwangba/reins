@@ -13,6 +13,8 @@ program
   .description('Initialize project constraints')
   .option('-d, --depth <depth>', 'Scan depth (L0, L0-L1, L0-L2)', 'L0-L2')
   .option('--dry-run', 'Preview changes without writing files')
+  .option('--adapters <ids>', 'Adapters to generate (comma-separated: claude-code,cursor,copilot,...)')
+  .option('--no-input', 'Non-interactive mode')
   .action(async (options) => {
     const { initCommand } = await import('./commands/init.js');
     await initCommand(process.cwd(), options);

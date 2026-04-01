@@ -83,6 +83,10 @@ export interface KnowledgeConfig {
   };
 }
 
+export interface AdaptersConfig {
+  enabled: string[];
+}
+
 export interface ReinsConfig {
   scan: ScanConfig;
   develop: DevelopConfig;
@@ -92,6 +96,7 @@ export interface ReinsConfig {
   status: StatusConfig;
   evaluation: EvaluationConfig;
   knowledge: KnowledgeConfig;
+  adapters: AdaptersConfig;
 }
 
 export function getDefaultConfig(): ReinsConfig {
@@ -168,6 +173,9 @@ export function getDefaultConfig(): ReinsConfig {
         min_success_rate: 0.8,
         auto_suggest: true,
       },
+    },
+    adapters: {
+      enabled: [],
     },
   };
 }

@@ -107,6 +107,14 @@ export async function runUpdate(options: { autoApply?: boolean }): Promise<void>
   const { writeConstraintsFile } = await import('../constraints/generator.js');
   writeConstraintsFile(projectRoot, finalConstraints, context);
 
+  // Regenerate adapter files using saved selection
+  const { ADAPTER_REGISTRY, runAdaptersV2 } = await import('../adapters/index.js');
+  const enabledAdapters = reinsConfig.adapters?.enabled ?? [];
+  const adapterIds = enabledAdapters.length > 0 ? enabledAdapters : ['claude-code'];
+  if (ADAPTER_REGISTRY.length > 0) {
+    runAdaptersV2(projectRoot, finalConstraints, context, config, adapterIds);
+  }
+
   // Rebuild manifest after writes so next update sees correct baseline
   const postWriteManifest = buildManifest(projectRoot);
   saveManifest(projectRoot, postWriteManifest);

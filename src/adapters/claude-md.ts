@@ -1,6 +1,10 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Constraint, ConstraintsConfig } from '../constraints/schema.js';
 import type { CodebaseContext } from '../scanner/types.js';
 import type { Adapter } from './base-adapter.js';
+import { registerAdapter } from './base-adapter.js';
+import type { AdapterDefinition, AdapterInput, AdapterOutput } from './base-adapter.js';
 
 function inferCommands(context: CodebaseContext): string[] {
   const pm = context.stack.packageManager || 'npm';
@@ -85,3 +89,75 @@ export const ClaudeMdAdapter: Adapter = {
     return lines.join('\n') + '\n';
   },
 };
+
+export const ClaudeCodeAdapter: AdapterDefinition = {
+  id: 'claude-code',
+  displayName: 'Claude Code',
+  description: '→ CLAUDE.md, AGENTS.md, .claude/settings.json',
+
+  detect(projectRoot: string): boolean {
+    return existsSync(join(projectRoot, '.claude')) || existsSync(join(projectRoot, 'CLAUDE.md'));
+  },
+
+  generate(input: AdapterInput): AdapterOutput[] {
+    const { content } = input;
+    const outputs: AdapterOutput[] = [];
+
+    // CLAUDE.md
+    const lines: string[] = [];
+    lines.push(`# ${content.projectName}`);
+    lines.push('');
+    lines.push(`**Stack**: ${content.projectSummary}`);
+    lines.push('');
+    lines.push('## Commands');
+    lines.push('');
+    lines.push(content.commandsBlock || '- No commands detected');
+    lines.push('');
+    lines.push('## Critical Rules');
+    lines.push('');
+    if (content.criticalRules.length > 0) {
+      lines.push(...content.criticalRules.slice(0, 5).map(r => `- ${r}`));
+    } else {
+      lines.push('- No critical constraints detected');
+    }
+    if (content.projectMapLines.length > 0) {
+      lines.push('');
+      lines.push('## Project Map');
+      lines.push('');
+      lines.push(...content.projectMapLines);
+    }
+    lines.push('');
+    lines.push('## Reins');
+    lines.push('');
+    lines.push('- Constraints: `.reins/constraints.yaml`');
+    lines.push('- Patterns: `.reins/patterns/`');
+    lines.push('- Agent context: `AGENTS.md` (per-directory)');
+
+    outputs.push({ path: 'CLAUDE.md', content: lines.join('\n') + '\n', label: 'Claude Code context' });
+
+    // AGENTS.md (simplified — one for project root)
+    const agentsLines: string[] = [];
+    agentsLines.push(`# ${content.projectName} — Agent Context`);
+    agentsLines.push('');
+    agentsLines.push(`Architecture: ${content.architectureSummary}`);
+    agentsLines.push('');
+    if (content.importantRules.length > 0) {
+      agentsLines.push('## Important Rules');
+      agentsLines.push('');
+      agentsLines.push(...content.importantRules.map(r => `- ${r}`));
+      agentsLines.push('');
+    }
+    if (content.conventionsBlock) {
+      agentsLines.push('## Conventions');
+      agentsLines.push('');
+      agentsLines.push(content.conventionsBlock);
+      agentsLines.push('');
+    }
+
+    outputs.push({ path: 'AGENTS.md', content: agentsLines.join('\n') + '\n', label: 'Agent context (per-directory)' });
+
+    return outputs;
+  },
+};
+
+registerAdapter(ClaudeCodeAdapter);

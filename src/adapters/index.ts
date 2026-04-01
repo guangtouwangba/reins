@@ -20,3 +20,20 @@ export const DEFAULT_ADAPTERS: Adapter[] = [
   CopilotInstructionsAdapter,
   WindsurfRulesAdapter,
 ];
+
+// V2 adapter types and registry
+export type { AdapterDefinition, AdapterInput, AdapterOutput } from './base-adapter.js';
+export { ADAPTER_REGISTRY, registerAdapter, runAdaptersV2 } from './base-adapter.js';
+export { buildSharedContent } from './shared-content.js';
+
+// V2 adapters — side-effect imports trigger registerAdapter()
+import './claude-md.js';
+import './cursor-rules.js';
+import './copilot-instructions.js';
+import './windsurf-rules.js';
+import './cline.js';
+import './continue-dev.js';
+import './amazon-q.js';
+import './augment.js';
+import './aider.js';
+import './gemini.js';
