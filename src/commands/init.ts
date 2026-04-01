@@ -16,7 +16,7 @@ export interface InitOptions {
   noInput?: boolean;
 }
 
-function selectAdapters(projectRoot: string, options: InitOptions, config: ReturnType<typeof loadConfig>): string[] {
+async function selectAdapters(projectRoot: string, options: InitOptions, config: ReturnType<typeof loadConfig>): Promise<string[]> {
   // Explicit --adapters flag takes priority
   if (options.adapters) {
     return options.adapters.split(',').map(s => s.trim()).filter(Boolean);
@@ -28,20 +28,66 @@ function selectAdapters(projectRoot: string, options: InitOptions, config: Retur
   }
 
   // Auto-detect installed tools
-  const detected = ADAPTER_REGISTRY
-    .filter(a => a.detect(projectRoot))
-    .map(a => a.id);
+  const detectedSet = new Set(
+    ADAPTER_REGISTRY.filter(a => a.detect(projectRoot)).map(a => a.id),
+  );
 
   // Non-interactive: use detected or default to claude-code
   if (options.noInput || !process.stdin.isTTY) {
-    return detected.length > 0 ? detected : ['claude-code'];
+    return detectedSet.size > 0 ? [...detectedSet] : ['claude-code'];
   }
 
-  // Interactive mode: for now, use detected + claude-code as default
-  // Real interactive multi-select would use @inquirer/prompts
-  const selected = new Set(detected);
-  selected.add('claude-code'); // always include claude-code by default
-  return [...selected];
+  // Interactive multi-select
+  const { createInterface } = await import('node:readline');
+
+  // Build selection state: detected tools pre-selected, claude-code always pre-selected
+  const selections = ADAPTER_REGISTRY.map(a => ({
+    id: a.id,
+    label: a.displayName,
+    desc: a.description,
+    selected: detectedSet.has(a.id) || a.id === 'claude-code',
+  }));
+
+  console.log('');
+  console.log('Which AI tools do you use? (enter numbers to toggle, then press enter to confirm)');
+  console.log('');
+  for (let i = 0; i < selections.length; i++) {
+    const s = selections[i]!;
+    const check = s.selected ? '◉' : '◯';
+    const detected = detectedSet.has(s.id) ? ' (detected)' : '';
+    console.log(`  ${i + 1}. ${check} ${s.label.padEnd(20)} ${s.desc}${detected}`);
+  }
+  console.log('');
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>(resolve => {
+    rl.question('Toggle (e.g. "2 5 6") or press enter to accept: ', ans => {
+      rl.close();
+      resolve(ans.trim());
+    });
+  });
+
+  // Parse toggle input
+  if (answer) {
+    const toggles = answer.split(/[\s,]+/).map(s => parseInt(s, 10) - 1).filter(n => !isNaN(n));
+    for (const idx of toggles) {
+      if (idx >= 0 && idx < selections.length) {
+        selections[idx]!.selected = !selections[idx]!.selected;
+      }
+    }
+  }
+
+  const result = selections.filter(s => s.selected).map(s => s.id);
+
+  // Show final selection
+  console.log('');
+  console.log('Selected:');
+  for (const s of selections.filter(s => s.selected)) {
+    console.log(`  ✓ ${s.label} ${s.desc}`);
+  }
+  console.log('');
+
+  return result.length > 0 ? result : ['claude-code'];
 }
 
 export async function initCommand(projectRoot: string, options: InitOptions): Promise<void> {
@@ -148,7 +194,7 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   generateContext(projectRoot, constraints, context, depth);
 
   // 7. Select adapters
-  const adapterIds = selectAdapters(projectRoot, options, config);
+  const adapterIds = await selectAdapters(projectRoot, options, config);
 
   // Save adapter selection to config
   if (!options.dryRun) {
