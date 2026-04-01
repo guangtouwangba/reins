@@ -1,5 +1,6 @@
 import type { Constraint, Severity } from '../constraints/schema.js';
 import type { InjectionContext, Profile } from './types.js';
+import type { ScoredSkill } from '../scanner/skill-types.js';
 
 // ---------------------------------------------------------------------------
 // Profile filtering
@@ -27,7 +28,7 @@ export function filterByProfile(constraints: Constraint[], profile: Profile): Co
 // Main injector
 // ---------------------------------------------------------------------------
 
-export function injectConstraints(task: string, ctx: InjectionContext): string {
+export function injectConstraints(task: string, ctx: InjectionContext, skills?: ScoredSkill[]): string {
   const filtered = filterByProfile(ctx.constraints, ctx.profile);
   const blockHooks = ctx.hooks.filter(h => h.mode === 'block');
 
@@ -38,6 +39,19 @@ export function injectConstraints(task: string, ctx: InjectionContext): string {
   lines.push('## Task');
   lines.push(task);
   lines.push('');
+
+  // Skills section
+  if (skills && skills.length > 0) {
+    lines.push('## Active Skills (auto-loaded)');
+    lines.push('');
+    for (const skill of skills) {
+      lines.push(`### ${skill.entry.title}`);
+      lines.push(`Source: ${skill.entry.sourcePath}`);
+      lines.push('');
+      lines.push(skill.content);
+      lines.push('');
+    }
+  }
 
   lines.push('## Active Constraints');
   if (filtered.length === 0) {

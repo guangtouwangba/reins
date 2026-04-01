@@ -28,6 +28,7 @@ program
   .option('--spec <path>', 'Load existing spec from path')
   .option('--no-input', 'Non-interactive mode (skip all prompts)')
   .option('--dry-run', 'Generate plan only, no code changes')
+  .option('--skills <ids>', 'Explicitly load specific skills (comma-separated)')
   .action(async (task, options) => {
     const { runPipeline } = await import('./pipeline/runner.js');
     const skipStages: string[] = [];
@@ -46,6 +47,7 @@ program
       skipStages,
       specPath: options.spec,
       noInput: options.noInput ?? !process.stdin.isTTY,
+      skillIds: options.skills ? (options.skills as string).split(',').map((s: string) => s.trim()) : undefined,
       onStageChange: (stage, status) => {
         if (status === 'start') console.log(`  [${stage}] starting...`);
         else if (status === 'complete') console.log(`  [${stage}] ✓`);
@@ -142,6 +144,24 @@ program
   .action(async (action, args) => {
     const { runHook } = await import('./commands/hook-cmd.js');
     await runHook(action, args);
+  });
+
+program
+  .command('skill')
+  .description('Manage skills')
+  .argument('[action]', 'Action: create, list')
+  .argument('[args...]', 'Action arguments')
+  .action(async (action, args) => {
+    const { runSkill } = await import('./commands/skill-cmd.js');
+    await runSkill(action, args);
+  });
+
+program
+  .command('skills')
+  .description('List all indexed skills')
+  .action(async () => {
+    const { runSkillList } = await import('./commands/skill-cmd.js');
+    await runSkillList();
   });
 
 program.parse();

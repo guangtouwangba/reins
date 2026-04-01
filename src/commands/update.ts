@@ -115,6 +115,13 @@ export async function runUpdate(options: { autoApply?: boolean }): Promise<void>
     runAdaptersV2(projectRoot, finalConstraints, context, config, adapterIds);
   }
 
+  // Re-index skills
+  if (reinsConfig.skills?.enabled) {
+    const { buildSkillIndex, saveSkillIndex } = await import('../scanner/skill-indexer.js');
+    const skillIndex = buildSkillIndex(projectRoot, reinsConfig.skills.sources ?? []);
+    saveSkillIndex(projectRoot, skillIndex);
+  }
+
   // Rebuild manifest after writes so next update sees correct baseline
   const postWriteManifest = buildManifest(projectRoot);
   saveManifest(projectRoot, postWriteManifest);

@@ -8,6 +8,7 @@ export interface PipelineOpts {
   skipStages?: string[];
   specPath?: string;
   noInput?: boolean;
+  skillIds?: string[];
   onStageChange?: (stage: string, status: 'start' | 'complete' | 'skip' | 'fail') => void;
 }
 

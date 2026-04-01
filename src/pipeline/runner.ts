@@ -17,6 +17,9 @@ import { refineRequirements } from './requirement-refiner.js';
 import { generateDesign } from './design-generator.js';
 import { generateTasks } from './task-generator.js';
 import { loadSpec, writeSpecFile, updateSpecStatus } from '../state/specs.js';
+import { matchSkills } from './skill-matcher.js';
+import { loadSkillIndex } from '../scanner/skill-indexer.js';
+import type { ScoredSkill } from '../scanner/skill-types.js';
 
 // ---------------------------------------------------------------------------
 // Stage definitions
@@ -171,6 +174,21 @@ export async function runPipeline(
     stageResults['taskGenerate'] = { success: true, duration: 0, output: '', skipped: true };
   }
 
+  // Skill matching (before HARNESS_INIT)
+  let matchedSkills: ScoredSkill[] = [];
+  if (config.skills?.enabled) {
+    const skillIndex = loadSkillIndex(projectRoot);
+    if (skillIndex) {
+      const { emptyCodebaseContext } = await import('../scanner/types.js');
+      const minContext = emptyCodebaseContext();
+      matchedSkills = matchSkills(task, minContext, skillIndex, {
+        max_tokens: config.skills.inject?.max_tokens ?? 4000,
+        max_skills: config.skills.inject?.max_skills ?? 5,
+      });
+      tracer.trace('pipeline', 'skills:matched', { count: matchedSkills.length, ids: matchedSkills.map(s => s.entry.id) });
+    }
+  }
+
   // HARNESS_INIT — always runs
   {
     const stageStart = Date.now();
@@ -182,7 +200,7 @@ export async function runPipeline(
         constraints,
         hooks: [],
         pipeline: { stages: ALL_STAGES.slice(), pre_commit: [], post_develop: [] },
-      });
+      }, matchedSkills);
       stageResults['harnessInit'] = {
         success: true,
         duration: Date.now() - stageStart,

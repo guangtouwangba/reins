@@ -275,6 +275,16 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   // Run V2 adapters
   const adapterResults = runAdaptersV2(projectRoot, constraints, context, constraintsConfig, adapterIds);
 
+  // Skill indexing
+  if (!options.dryRun && config.skills?.enabled) {
+    const { buildSkillIndex, saveSkillIndex } = await import('../scanner/skill-indexer.js');
+    const skillIndex = buildSkillIndex(projectRoot, config.skills.sources ?? []);
+    saveSkillIndex(projectRoot, skillIndex);
+    if (skillIndex.skills.length > 0) {
+      console.log(`  ✓ ${skillIndex.skills.length} skills indexed`);
+    }
+  }
+
   // 8. Print summary
   console.log('  Generated files:');
   console.log('  ✓ .reins/constraints.yaml');

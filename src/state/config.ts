@@ -83,6 +83,16 @@ export interface KnowledgeConfig {
   };
 }
 
+export interface SkillsConfig {
+  enabled: boolean;
+  sources: string[];
+  inject: {
+    max_tokens: number;
+    max_skills: number;
+  };
+  auto_index: boolean;
+}
+
 export interface AdaptersConfig {
   enabled: string[];
 }
@@ -96,6 +106,7 @@ export interface ReinsConfig {
   status: StatusConfig;
   evaluation: EvaluationConfig;
   knowledge: KnowledgeConfig;
+  skills: SkillsConfig;
   adapters: AdaptersConfig;
 }
 
@@ -173,6 +184,15 @@ export function getDefaultConfig(): ReinsConfig {
         min_success_rate: 0.8,
         auto_suggest: true,
       },
+    },
+    skills: {
+      enabled: true,
+      sources: [],
+      inject: {
+        max_tokens: 4000,
+        max_skills: 5,
+      },
+      auto_index: true,
     },
     adapters: {
       enabled: [],
