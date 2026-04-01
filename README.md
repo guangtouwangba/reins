@@ -265,6 +265,7 @@ Detailed module design specs in `modules/`:
 Supplementary runtime notes:
 
 - [docs/user-requirement-runtime-sequence.md](docs/user-requirement-runtime-sequence.md): How a user requirement actually flows through the current system
+- [docs/install-and-init-distribution.md](docs/install-and-init-distribution.md): Why Reins should support both `npx` and global install, and make `init` the core product flow
 
 ---
 
