@@ -147,6 +147,14 @@ program
   });
 
 program
+  .command('gate <event>')
+  .description('Run gate check (internal, called by hooks)')
+  .action(async (event) => {
+    const { runGate } = await import('./gate/index.js');
+    await runGate(event);
+  });
+
+program
   .command('skill')
   .description('Manage skills')
   .argument('[action]', 'Action: create, list')

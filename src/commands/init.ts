@@ -3,6 +3,8 @@ import { scan } from '../scanner/scan.js';
 import { generateConstraints, writeConstraintsFile } from '../constraints/generator.js';
 import { generateContext } from '../context/index.js';
 import { runAdapters, DEFAULT_ADAPTERS, ADAPTER_REGISTRY, runAdaptersV2 } from '../adapters/index.js';
+import { generateHooks } from '../hooks/generator.js';
+import { generateSettingsJson } from '../hooks/settings-writer.js';
 import type { ConstraintsConfig } from '../constraints/schema.js';
 import type { ScanDepth } from '../scanner/scan.js';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
@@ -53,7 +55,6 @@ async function interactiveMultiSelect(items: SelectionItem[]): Promise<string[]>
 
   // Hide cursor and render initial state
   stdout.write('\x1b[?25l'); // hide cursor
-  console.log(''); // blank line before UI
   renderSelect(items, cursor);
 
   return new Promise<string[]>((resolve) => {
@@ -71,7 +72,7 @@ async function interactiveMultiSelect(items: SelectionItem[]): Promise<string[]>
 
     const redraw = () => {
       // Move to start of our UI block and clear it
-      stdout.write(`\x1b[${totalLines}F`); // move up N lines to column 0
+      stdout.write(`\x1b[${totalLines - 1}F`); // move up to start of our UI block
       stdout.write('\x1b[J');               // clear from cursor to end of screen
       renderSelect(items, cursor);
     };
@@ -275,6 +276,12 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   // Run V2 adapters
   const adapterResults = runAdaptersV2(projectRoot, constraints, context, constraintsConfig, adapterIds);
 
+  // 8. Generate hooks and register in .claude/settings.json
+  const constraintsPath = join(projectRoot, '.reins', 'constraints.yaml');
+  const hookConfigs = generateHooks(projectRoot, constraintsPath);
+  generateSettingsJson(projectRoot, hookConfigs);
+  console.log(`  ✓ ${hookConfigs.length} hooks generated`);
+
   // Skill indexing
   if (!options.dryRun && config.skills?.enabled) {
     const { buildSkillIndex, saveSkillIndex } = await import('../scanner/skill-indexer.js');
@@ -285,9 +292,10 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
     }
   }
 
-  // 8. Print summary
+  // Print summary
   console.log('  Generated files:');
   console.log('  ✓ .reins/constraints.yaml');
+  console.log('  ✓ .claude/settings.json');
   for (const result of adapterResults) {
     if (result.written) {
       console.log(`  ✓ ${result.path.replace(projectRoot + '/', '')}`);

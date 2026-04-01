@@ -108,6 +108,12 @@ export interface ReinsConfig {
   knowledge: KnowledgeConfig;
   skills: SkillsConfig;
   adapters: AdaptersConfig;
+  gate?: {
+    stop_skip_test?: boolean;
+    stop_skip_lint?: boolean;
+    context_max_knowledge?: number;
+    context_max_skills?: number;
+  };
 }
 
 export function getDefaultConfig(): ReinsConfig {

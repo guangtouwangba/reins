@@ -65,106 +65,42 @@ describe('generateHooks', () => {
   beforeEach(() => { projectRoot = makeTmpDir(); });
   afterEach(() => { rmSync(projectRoot, { recursive: true, force: true }); });
 
-  it('returns empty array when constraints.yaml does not exist', () => {
-    const result = generateHooks(projectRoot, join(projectRoot, '.reins', 'constraints.yaml'));
-    expect(result).toEqual([]);
+  it('always returns 5 gate hook configs', () => {
+    const result = generateHooks(projectRoot);
+    expect(result).toHaveLength(5);
+    expect(result.map(h => h.constraintId).sort()).toEqual([
+      'gate-context', 'gate-post-edit', 'gate-pre-bash', 'gate-pre-edit', 'gate-stop',
+    ]);
   });
 
   it('always writes protect-constraints.sh', () => {
-    makeConstraintsYaml(projectRoot, []);
-    generateHooks(projectRoot, join(projectRoot, '.reins', 'constraints.yaml'));
+    generateHooks(projectRoot);
     expect(existsSync(join(projectRoot, '.reins', 'hooks', 'protect-constraints.sh'))).toBe(true);
   });
 
-  it('writes scripts for enforced constraints', () => {
-    const constraints = [
-      {
-        id: 'no-raw-sql',
-        rule: 'Never write raw SQL',
-        severity: 'critical',
-        scope: 'global',
-        source: 'auto',
-        enforcement: { soft: false, hook: true, hook_type: 'post_edit', hook_mode: 'block', hook_check: 'execute\\s*\\(' },
-        status: 'active',
-      },
-      {
-        id: 'no-eval',
-        rule: 'Never use eval()',
-        severity: 'critical',
-        scope: 'global',
-        source: 'auto',
-        enforcement: { soft: false, hook: true, hook_type: 'pre_bash', hook_mode: 'warn', hook_check: '\\beval\\b' },
-        status: 'active',
-      },
-    ];
-    const constraintsPath = makeConstraintsYaml(projectRoot, constraints);
-    const hooks = generateHooks(projectRoot, constraintsPath);
-
-    expect(hooks).toHaveLength(2);
-    expect(hooks[0]?.constraintId).toBe('no-raw-sql');
-    expect(hooks[1]?.constraintId).toBe('no-eval');
-
-    // Scripts are written
-    expect(existsSync(join(projectRoot, '.reins', 'hooks', 'no-raw-sql.sh'))).toBe(true);
-    expect(existsSync(join(projectRoot, '.reins', 'hooks', 'no-eval.sh'))).toBe(true);
+  it('creates 5 gate shell scripts in .reins/hooks/', () => {
+    generateHooks(projectRoot);
+    const hooksDir = join(projectRoot, '.reins', 'hooks');
+    expect(existsSync(join(hooksDir, 'gate-context.sh'))).toBe(true);
+    expect(existsSync(join(hooksDir, 'gate-pre-edit.sh'))).toBe(true);
+    expect(existsSync(join(hooksDir, 'gate-post-edit.sh'))).toBe(true);
+    expect(existsSync(join(hooksDir, 'gate-pre-bash.sh'))).toBe(true);
+    expect(existsSync(join(hooksDir, 'gate-stop.sh'))).toBe(true);
   });
 
-  it('skips constraints where enforcement.hook is false', () => {
-    const constraints = [
-      {
-        id: 'soft-rule',
-        rule: 'Use TypeScript strict mode',
-        severity: 'important',
-        scope: 'global',
-        source: 'auto',
-        enforcement: { soft: true, hook: false },
-        status: 'active',
-      },
-    ];
-    const constraintsPath = makeConstraintsYaml(projectRoot, constraints);
-    const hooks = generateHooks(projectRoot, constraintsPath);
-    expect(hooks).toHaveLength(0);
+  it('each gate script contains exec reins gate <event>', () => {
+    generateHooks(projectRoot);
+    const hooksDir = join(projectRoot, '.reins', 'hooks');
+    const contextScript = readFileSync(join(hooksDir, 'gate-context.sh'), 'utf-8');
+    expect(contextScript).toContain('exec reins gate context');
+    const stopScript = readFileSync(join(hooksDir, 'gate-stop.sh'), 'utf-8');
+    expect(stopScript).toContain('exec reins gate stop');
   });
 
-  it('rendered post_edit script contains CONSTRAINT_ID substitution', () => {
-    const constraints = [
-      {
-        id: 'test-post-edit',
-        rule: 'No raw SQL',
-        severity: 'critical',
-        scope: 'global',
-        source: 'auto',
-        enforcement: { soft: false, hook: true, hook_type: 'post_edit', hook_mode: 'block', hook_check: 'SELECT\\s*\\*' },
-        status: 'active',
-      },
-    ];
-    const constraintsPath = makeConstraintsYaml(projectRoot, constraints);
-    generateHooks(projectRoot, constraintsPath);
-    const content = readFileSync(join(projectRoot, '.reins', 'hooks', 'test-post-edit.sh'), 'utf-8');
-    expect(content).toContain('test-post-edit');
-    expect(content).toContain('SELECT\\s*\\*');
-    expect(content).not.toContain('{{CONSTRAINT_ID}}');
-    expect(content).not.toContain('{{CHECK_PATTERN}}');
-  });
-
-  it('warn mode script exits 0 instead of 2 on match', () => {
-    const constraints = [
-      {
-        id: 'warn-rule',
-        rule: 'Avoid console.log',
-        severity: 'important',
-        scope: 'global',
-        source: 'auto',
-        enforcement: { soft: true, hook: true, hook_type: 'post_edit', hook_mode: 'warn', hook_check: 'console\\.log' },
-        status: 'active',
-      },
-    ];
-    const constraintsPath = makeConstraintsYaml(projectRoot, constraints);
-    generateHooks(projectRoot, constraintsPath);
-    const content = readFileSync(join(projectRoot, '.reins', 'hooks', 'warn-rule.sh'), 'utf-8');
-    expect(content).toContain('"warn"');
-    // warn mode exits 0
-    expect(content).toMatch(/MODE.*=.*warn[\s\S]*exit 0/);
+  it('gate scripts are executable (mode includes 0o755)', () => {
+    generateHooks(projectRoot);
+    const stat = statSync(join(projectRoot, '.reins', 'hooks', 'gate-context.sh'));
+    expect(stat.mode & 0o100).toBe(0o100);
   });
 });
 
