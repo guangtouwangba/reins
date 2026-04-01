@@ -24,31 +24,37 @@ interface SelectionItem {
   detected: boolean;
 }
 
-function renderSelect(items: SelectionItem[], cursor: number): string {
+// Fixed line count for the selection UI (header + items + footer)
+const HEADER_LINES = 2; // title + blank line
+const FOOTER_LINES = 1; // blank line after items
+
+function renderSelect(items: SelectionItem[], cursor: number): void {
+  const stdout = process.stdout;
   const lines: string[] = [];
-  lines.push('');
-  lines.push('Which AI tools do you use? (↑↓ move, space toggle, enter confirm)');
+  lines.push('Which AI tools do you use? (\x1b[36m↑↓\x1b[0m move, \x1b[36mspace\x1b[0m toggle, \x1b[36menter\x1b[0m confirm)');
   lines.push('');
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
-    const pointer = i === cursor ? '❯' : ' ';
-    const check = item.selected ? '◉' : '◯';
-    const det = item.detected ? ' (detected)' : '';
+    const pointer = i === cursor ? '\x1b[36m❯\x1b[0m' : ' ';
+    const check = item.selected ? '\x1b[32m◉\x1b[0m' : '◯';
+    const det = item.detected ? ' \x1b[2m(detected)\x1b[0m' : '';
     lines.push(`  ${pointer} ${check} ${item.label.padEnd(20)} ${item.desc}${det}`);
   }
   lines.push('');
-  return lines.join('\n');
+  stdout.write(lines.join('\n'));
 }
 
 async function interactiveMultiSelect(items: SelectionItem[]): Promise<string[]> {
   const stdin = process.stdin;
   const stdout = process.stdout;
+  const totalLines = HEADER_LINES + items.length + FOOTER_LINES;
 
   let cursor = 0;
 
-  // Render initial state
-  let rendered = renderSelect(items, cursor);
-  stdout.write(rendered);
+  // Hide cursor and render initial state
+  stdout.write('\x1b[?25l'); // hide cursor
+  console.log(''); // blank line before UI
+  renderSelect(items, cursor);
 
   return new Promise<string[]>((resolve) => {
     const wasRaw = stdin.isRaw;
@@ -57,51 +63,41 @@ async function interactiveMultiSelect(items: SelectionItem[]): Promise<string[]>
     stdin.setEncoding('utf-8');
 
     const cleanup = () => {
+      stdout.write('\x1b[?25h'); // show cursor
       stdin.setRawMode(wasRaw ?? false);
       stdin.pause();
       stdin.removeListener('data', onData);
     };
 
     const redraw = () => {
-      // Move cursor up to clear previous render
-      const lineCount = rendered.split('\n').length;
-      stdout.write(`\x1b[${lineCount}A\x1b[0J`);
-      rendered = renderSelect(items, cursor);
-      stdout.write(rendered);
+      // Move to start of our UI block and clear it
+      stdout.write(`\x1b[${totalLines}F`); // move up N lines to column 0
+      stdout.write('\x1b[J');               // clear from cursor to end of screen
+      renderSelect(items, cursor);
     };
 
     const onData = (key: string) => {
-      // Ctrl+C
-      if (key === '\x03') {
-        cleanup();
-        process.exit(0);
-      }
-      // Enter
+      if (key === '\x03') { cleanup(); process.exit(0); }
       if (key === '\r' || key === '\n') {
         cleanup();
         resolve(items.filter(i => i.selected).map(i => i.id));
         return;
       }
-      // Space — toggle
       if (key === ' ') {
         items[cursor]!.selected = !items[cursor]!.selected;
         redraw();
         return;
       }
-      // Arrow keys (escape sequences)
       if (key === '\x1b[A' || key === 'k') {
-        // Up
         cursor = cursor > 0 ? cursor - 1 : items.length - 1;
         redraw();
         return;
       }
       if (key === '\x1b[B' || key === 'j') {
-        // Down
         cursor = cursor < items.length - 1 ? cursor + 1 : 0;
         redraw();
         return;
       }
-      // 'a' — select all
       if (key === 'a') {
         const allSelected = items.every(i => i.selected);
         for (const i of items) i.selected = !allSelected;
