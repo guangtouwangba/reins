@@ -84,6 +84,24 @@ describe('runStatus', () => {
     expect((parsed as { summary: unknown }).summary).toBeDefined();
   });
 
+  it('uses observational language for zero-violation suggestions', async () => {
+    const constraints = [
+      { id: 'c1', rule: 'Rule 1', severity: 'critical', scope: 'global', source: 'auto', enforcement: { soft: true, hook: false }, status: 'active' },
+    ];
+    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), makeConstraintsYaml(constraints), 'utf-8');
+
+    const { runStatus } = await import('./status.js');
+    await runStatus({});
+
+    const output = consoleSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+    // Should NOT contain "Consider relaxing" language
+    expect(output).not.toContain('Consider relaxing');
+    // Zero-violation note should use observational language
+    if (output.includes('c1')) {
+      expect(output).not.toContain('Consider');
+    }
+  });
+
   it('filters by severity when --filter is provided', async () => {
     const constraints = [
       { id: 'c1', rule: 'Rule 1', severity: 'critical', scope: 'global', source: 'auto', enforcement: { soft: true, hook: false }, status: 'active' },

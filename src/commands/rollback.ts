@@ -23,6 +23,17 @@ export async function runRollback(options: { to?: string }): Promise<void> {
       }
       return;
     }
+    // Preflight summary
+    const target = snapshots.find(s => s.id === options.to)!;
+    console.log('');
+    console.log('Rollback preview:');
+    console.log(`  Snapshot: ${target.id} (${target.trigger}, ${target.createdAt})`);
+    console.log(`  Files to restore: ${target.files.length}`);
+    for (const f of target.files) {
+      console.log(`    ${f.path}`);
+    }
+    console.log('');
+
     targetId = options.to;
   } else {
     // Interactive selection
@@ -57,6 +68,31 @@ export async function runRollback(options: { to?: string }): Promise<void> {
       console.log('Invalid selection.');
       return;
     }
+
+    // Show preview
+    console.log('');
+    console.log('Rollback preview:');
+    console.log(`  Snapshot: ${selected.id} (${selected.trigger}, ${selected.createdAt})`);
+    console.log(`  Files to restore: ${selected.files.length}`);
+    for (const f of selected.files) {
+      console.log(`    ${f.path}`);
+    }
+    console.log('');
+
+    // Confirm
+    const rl2 = createInterface({ input: process.stdin, output: process.stdout });
+    const confirm = await new Promise<string>(resolve => {
+      rl2.question('Proceed with rollback? (y/n): ', answer => {
+        rl2.close();
+        resolve(answer.trim().toLowerCase());
+      });
+    });
+
+    if (confirm !== 'y') {
+      console.log('Rollback cancelled.');
+      return;
+    }
+
     targetId = selected.id;
   }
 
@@ -66,14 +102,7 @@ export async function runRollback(options: { to?: string }): Promise<void> {
   console.log(`Restoring snapshot: ${targetId}`);
   restoreSnapshot(projectRoot, targetId);
 
-  const restored = snapshots.find(s => s.id === targetId);
-  if (restored) {
-    console.log(`Restored ${restored.files.length} files:`);
-    for (const f of restored.files) {
-      console.log(`  ${f.path}`);
-    }
-  }
-
   console.log('');
-  console.log('Rollback complete.');
+  console.log(`Rollback complete. Restored to snapshot ${targetId}.`);
+  console.log('A pre-rollback snapshot was saved in case you need to undo this.');
 }

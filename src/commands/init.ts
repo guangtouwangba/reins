@@ -126,5 +126,10 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
     }
   }
   console.log('');
-  console.log("  Reins initialized. Run 'reins develop <task>' to start.");
+  console.log('  Reins initialized successfully.');
+  console.log('');
+  console.log('  Next steps:');
+  console.log('    reins status   — view constraint summary');
+  console.log('    reins test     — verify hooks are healthy');
+  console.log('    reins update   — update after project changes');
 }

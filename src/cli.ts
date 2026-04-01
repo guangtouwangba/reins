@@ -25,7 +25,14 @@ program
   .option('--skip <stages>', 'Skip pipeline stages (comma-separated)')
   .option('--dry-run', 'Generate plan only, no code changes')
   .action(async (task, options) => {
-    console.log(`reins develop — not yet implemented (task: ${task})`);
+    console.log('The develop command is not yet available.');
+    console.log('');
+    console.log('Current workflow:');
+    console.log('  1. reins init          — generate constraints');
+    console.log('  2. reins status        — check constraint status');
+    console.log('  3. reins update        — update constraints after project changes');
+    console.log('');
+    console.log('The develop command will enable AI-driven development under constraints in a future release.');
   });
 
 program
@@ -101,7 +108,7 @@ program
 program
   .command('hook')
   .description('Manage hooks')
-  .argument('[action]', 'Action: add, list, disable, fix, promote')
+  .argument('[action]', 'Action: add, list, disable')
   .argument('[args...]', 'Action arguments')
   .action(async (action, args) => {
     const { runHook } = await import('./commands/hook-cmd.js');

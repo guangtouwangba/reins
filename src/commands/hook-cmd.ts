@@ -31,7 +31,14 @@ export async function runHookList(projectRoot: string): Promise<void> {
     } catch { /* ignore */ }
   }
 
-  if (hookFiles.length === 0 && (!config || config.constraints.every(c => !c.enforcement.hook))) {
+  if (!config) {
+    console.log('No constraints configured yet.');
+    console.log('');
+    console.log('Run: reins init');
+    return;
+  }
+
+  if (hookFiles.length === 0 && config.constraints.every(c => !c.enforcement.hook)) {
     console.log('No hooks configured.');
     return;
   }
@@ -99,7 +106,7 @@ export async function runHookAdd(projectRoot: string, description: string): Prom
   // LLM call is a stub — we create a placeholder constraint and hook file
   const config = loadConstraintsConfig(projectRoot);
   if (!config) {
-    console.log('No .reins/constraints.yaml found. Run `reins init` first.');
+    console.log('No constraints configured yet. Run reins init first.');
     return;
   }
 
@@ -168,8 +175,21 @@ export async function runHook(action: string | undefined, args: string[]): Promi
       await runHookAdd(projectRoot, description);
       break;
     }
+    case 'fix':
+    case 'promote':
+      console.log(`The '${action}' action is not yet available.`);
+      console.log('');
+      console.log('Available actions:');
+      console.log('  reins hook list              — list all hooks');
+      console.log('  reins hook add <description> — add a new hook');
+      console.log('  reins hook disable <id>      — disable a hook');
+      break;
     default:
-      console.log('Usage: reins hook <list|disable|add> [args...]');
+      if (action) {
+        console.log(`Unknown action: ${action}`);
+        console.log('');
+      }
+      console.log('Usage: reins hook <list|add|disable> [args...]');
       break;
   }
 }

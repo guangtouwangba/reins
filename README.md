@@ -123,7 +123,7 @@ Captures agent experience and converts it into expertise. Structured reflection 
 | Command | Description |
 |---------|-------------|
 | `reins init` | Scan project, generate constraints and context files |
-| `reins develop <task>` | Auto-develop under constraints |
+| `reins develop <task>` | Auto-develop under constraints *(not yet available)* |
 | `reins status` | View constraint status and statistics |
 | `reins update` | Incrementally update constraints from the latest scan |
 | `reins test` | Test constraints and hooks |
@@ -135,12 +135,13 @@ Captures agent experience and converts it into expertise. Structured reflection 
 ```bash
 reins init --dry-run              # Preview, no file writes
 reins init --depth L0             # Only generate top-level CLAUDE.md
-reins init --force                # Overwrite existing .reins/ config
-reins develop "add user login"    # Develop under constraints
 reins status --format json        # JSON output
-reins update --auto-apply         # Auto-apply high-confidence updates
+reins update --auto-apply         # Auto-apply non-conflicting updates
 reins rollback --to <snapshot>    # Roll back to snapshot
 reins learn --auto                # Full OBSERVE → ANALYZE → LEARN pipeline
+reins hook list                   # List all hooks
+reins hook add "no raw SQL"       # Add a new hook from description
+reins hook disable <id>           # Disable a specific hook
 ```
 
 ---

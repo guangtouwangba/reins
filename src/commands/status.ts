@@ -146,9 +146,9 @@ function buildReport(
   const suggestions: string[] = [];
   for (const cs of constraintStatuses) {
     if (cs.violations.count === 0) {
-      suggestions.push(`Consider relaxing constraint ${cs.id} — zero violations recorded`);
+      suggestions.push(`${cs.id}: zero violations in this period`);
     } else if (cs.violations.count > 10 * 7) {
-      suggestions.push(`Consider upgrading constraint ${cs.id} to a hook — high violation rate`);
+      suggestions.push(`${cs.id}: high violation rate (${cs.violations.count}) — a hook may help enforcement`);
     }
   }
 
@@ -195,7 +195,10 @@ export async function runStatus(options: { filter?: string; format?: string; sin
   const constraintsPath = join(projectRoot, '.reins', 'constraints.yaml');
 
   if (!existsSync(constraintsPath)) {
-    console.log('No .reins/constraints.yaml found. Run `reins init` first.');
+    console.log('No constraints configured yet.');
+    console.log('');
+    console.log('Get started:');
+    console.log('  reins init    — scan your project and generate constraints');
     return;
   }
 

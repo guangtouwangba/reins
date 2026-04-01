@@ -39,7 +39,9 @@ export async function runTest(): Promise<void> {
   const hooksDir = join(projectRoot, '.reins', 'hooks');
 
   if (!existsSync(hooksDir)) {
-    console.log('No .reins/hooks/ directory found. Run `reins init` first.');
+    console.log('No hooks configured yet.');
+    console.log('');
+    console.log('Hooks are generated during init. Run: reins init');
     return;
   }
 
@@ -53,6 +55,8 @@ export async function runTest(): Promise<void> {
 
   if (entries.length === 0) {
     console.log('No hook scripts found in .reins/hooks/.');
+    console.log('');
+    console.log('Run reins init to generate hooks from constraints.');
     return;
   }
 
@@ -97,7 +101,8 @@ export async function runTest(): Promise<void> {
 
   console.log('');
   if (anyBroken) {
-    console.log(`Some hooks are broken. Run 'reins hook fix' to repair them.`);
+    console.log(`Some hooks need attention. Check the scripts in .reins/hooks/ for issues.`);
+    console.log('To disable a broken hook: reins hook disable <id>');
     process.exitCode = 1;
   } else {
     console.log('All hooks healthy.');
