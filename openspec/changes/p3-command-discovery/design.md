@@ -1,11 +1,12 @@
 ## Approach
 
-Split into four independent sub-systems that compose at the scan orchestrator level:
+Split into five independent sub-systems that compose at the scan orchestrator level:
 
 1. **Workspace Discovery** — detects monorepo boundaries and enumerates packages before any sub-detector runs
-2. **Command Resolution** — resolves executable commands per language via a 6-layer priority chain after stack detection completes
-3. **User Declaration** — loads `.reins/commands.yaml` as the highest-priority override for commands that cannot be auto-detected (internal CLI tools, enterprise wrappers)
-4. **Documentation Extraction** — extracts commands from README.md / CONTRIBUTING.md code blocks as a medium-confidence source
+2. **Command Resolution** — resolves executable commands per language via a 7-layer priority chain after stack detection completes
+3. **Skill Matching** — matches command-type skills from `~/.dev-harness/global-skills/` to the project by signal files or dependencies, pre-populating commands without interactive prompts
+4. **User Declaration** — loads `.reins/commands.yaml` as the highest-priority override for commands that cannot be auto-detected (internal CLI tools, enterprise wrappers)
+5. **Documentation Extraction** — extracts commands from README.md / CONTRIBUTING.md code blocks as a medium-confidence source
 
 All plug into the existing `scan()` pipeline as new phases. Existing sub-detectors (`detectStack`, `detectTests`, `detectRules`, `analyzePatterns`) are unchanged in logic — they only receive scoped inputs when called in per-package mode. The `contextRoot` parameter rename is mechanical: `projectRoot` → `contextRoot` in function signatures, with all call sites updated.
 
@@ -29,9 +30,12 @@ scan(projectRoot, depth, config)
       → return Partial<CommandMap> (confidence: 0.7)
   → commandResolver.resolve(projectRoot, filePaths, context.stack, docCommands)     [NEW]
       → layer 1-5: convention → makefile → docs → scripts → taskrunner
+  → skillMatcher.match(projectRoot, filePaths, context)                              [NEW]
+      → scan ~/.dev-harness/global-skills/ for matching command skills
+      → fill null slots in context.commands (layer 6)
   → userCommands.load(projectRoot)                                                  [NEW]
       → read .reins/commands.yaml if exists
-      → override context.commands with user declarations (layer 6)
+      → override context.commands with user declarations (layer 7)
   → analyzePatterns(filePaths, dirPaths)                                            [existing, if depth >= L2]
   → for each package in PackageEntry[]:                                             [NEW]
       → scopedFiles = filePaths.filter(f => startsWith(pkg.path + '/'))
@@ -111,12 +115,12 @@ interface CommandMap {
 
 interface ResolvedCommand {
   command:    string;
-  source:     'user' | 'script' | 'taskrunner' | 'docs' | 'makefile' | 'convention';
+  source:     'user' | 'skill' | 'script' | 'taskrunner' | 'docs' | 'makefile' | 'convention';
   confidence: number;  // 0-1
 }
 ```
 
-Resolution follows a 6-layer override chain (later layers override earlier):
+Resolution follows a 7-layer override chain (later layers override earlier):
 
 ```
 Layer 1: Language convention defaults          (confidence: 0.6)     goResolver, rustResolver, etc.
@@ -124,10 +128,11 @@ Layer 2: Makefile target parsing               (confidence: 0.9)     parseMakefi
 Layer 3: Documentation extraction              (confidence: 0.7)     extractCommandsFromDocs()
 Layer 4: Package script parsing                (confidence: 1.0)     package.json scripts, pyproject.toml scripts
 Layer 5: Taskrunner config parsing             (confidence: 1.0)     turbo.json, nx.json, melos.yaml
-Layer 6: User declaration                      (confidence: 1.0)     .reins/commands.yaml
+Layer 6: Skill matching                        (confidence: 1.0)     ~/.dev-harness/global-skills/
+Layer 7: User declaration                      (confidence: 1.0)     .reins/commands.yaml
 ```
 
-Each layer produces a `Partial<CommandMap>`. Non-null values from higher layers overwrite lower layers. Layer 6 (user declaration) is applied separately after auto-detection completes, ensuring it always wins.
+Each layer produces a `Partial<CommandMap>`. Non-null values from higher layers overwrite lower layers. Layers 6 and 7 are applied separately after auto-detection completes. Layer 7 (user declaration) always wins over skills.
 
 **Language convention resolvers:**
 
@@ -186,6 +191,65 @@ After language resolution, check for taskrunner configs and override:
 **Monorepo root vs package commands:**
 
 For monorepo roots, if a taskrunner is detected, root-level commands use the taskrunner (`turbo run test`). Per-package commands use the package's own scripts. This gives AI agents the choice: run everything from root via taskrunner, or run a single package's commands directly.
+
+### Sub-module: Skill Matcher (`src/scanner/skill-matcher.ts`)
+
+Exports `matchSkillCommands(projectRoot, filePaths, context): Partial<CommandMap>`.
+
+Scans `~/.dev-harness/global-skills/` for YAML files with `type: commands`. For each skill, checks whether its `match` conditions are satisfied by the current project.
+
+**Skill schema:**
+
+```yaml
+# ~/.dev-harness/global-skills/mycompany-toolchain.yaml
+name: mycompany-toolchain
+type: commands                    # only "commands" type skills are matched here
+match:
+  signals: ["myco.config.yaml", ".mycorc"]            # file existence
+  dependencies: ["@mycompany/cli", "@mycompany/dx"]   # in package.json/pyproject.toml deps
+  registry: "@mycompany/*"                             # any dep matching this pattern
+  language: ["typescript"]                             # stack.language match
+commands:
+  install: "myco install"
+  dev: "myco serve --hot"
+  build: "myco build"
+  lint: "myco lint --strict"
+  lintFix: "myco lint --strict --fix"
+  test: "dx test"
+  testSingle: "dx test {file}"
+```
+
+**Match interface:**
+
+```typescript
+interface CommandSkill {
+  name: string;
+  type: 'commands';
+  match: {
+    signals?: string[];        // any of these files exist → match
+    dependencies?: string[];   // any of these in project deps → match
+    registry?: string;         // glob pattern against dep names → match
+    language?: string[];       // any of these in stack.language → match
+  };
+  commands: Partial<Record<keyof CommandMap, string>>;
+}
+```
+
+**Match logic:**
+- A skill matches if **any** of its match conditions is satisfied (OR logic across condition types).
+- Within `signals`, `dependencies`, and `language`, **any** item matching is sufficient (OR within arrays).
+- `signals` checks against the `filePaths` array (already available from directory scan).
+- `dependencies` checks against parsed dependencies from `context.stack` or `package.json`.
+- `registry` is a glob pattern matched against all dependency names.
+- `language` checks against `context.stack.language`.
+- If multiple skills match, they are merged in alphabetical order by name. Later skills override earlier ones for the same command field.
+
+**Resolution:**
+- For each matched skill, each command entry becomes a `ResolvedCommand` with `source: 'skill'`, `confidence: 1.0`.
+- Skill commands only fill null slots in the `CommandMap` — they do not override commands already resolved by layers 1-5. This means auto-detected project-specific scripts always beat skill defaults.
+- Exception: if a skill command and an auto-detected command conflict, skill wins (layer 6 > layers 1-5). This handles the case where a company wrapper replaces the standard tool (e.g., `myco lint` replaces `eslint`).
+
+**Missing `~/.dev-harness/` directory:** If the directory does not exist, skill matching returns an empty result. No error, no warning.
 
 ### Sub-module: User Commands Loader (`src/scanner/user-commands.ts`)
 
@@ -300,7 +364,7 @@ New types added:
 ```typescript
 export interface ResolvedCommand {
   command:    string;
-  source:     'user' | 'script' | 'taskrunner' | 'docs' | 'makefile' | 'convention';
+  source:     'user' | 'skill' | 'script' | 'taskrunner' | 'docs' | 'makefile' | 'convention';
   confidence: number;
 }
 
@@ -439,8 +503,9 @@ For monorepos, each package section includes its own commands:
 
 - **Resolver priority order, first match wins**: A project can only be one kind of workspace. Checking pnpm before npm/yarn prevents double-detection (since pnpm projects also have `package.json` with `workspaces`). Go, Rust, Python, Flutter resolvers don't overlap.
 - **Scoped file lists via filter, not re-scanning**: The directory scan runs once at the root. Per-package scanning filters the existing file list by prefix rather than re-walking the filesystem. This keeps monorepo scanning fast — O(files) not O(packages × files).
-- **6-layer override chain, not plugin architecture**: Six fixed layers (convention → makefile → docs → scripts → taskrunner → user) are simpler to reason about than a generic plugin system. Each layer produces `Partial<CommandMap>` and merge is a plain object spread with null filtering. The user-declaration layer is applied separately after auto-detection to guarantee it always wins.
-- **User declaration as highest priority**: Internal CLI tools, enterprise wrappers, and custom toolchains cannot be auto-detected from repository files. `.reins/commands.yaml` is the escape hatch — committed to git, shared across the team, always overrides auto-detection. Partial declarations are supported: declare only what's custom, let auto-detection handle the rest.
+- **7-layer override chain, not plugin architecture**: Seven fixed layers (convention → makefile → docs → scripts → taskrunner → skill → user) are simpler to reason about than a generic plugin system. Each layer produces `Partial<CommandMap>` and merge is a plain object spread with null filtering. Layers 6 (skill) and 7 (user) are applied separately after auto-detection to guarantee correct override order.
+- **Skills as cross-project knowledge distribution**: A company with 20 projects all using `myco lint` installs one skill, and no project ever needs to be asked about `myco`. This is the primary mechanism for eliminating interactive prompts at scale. Skills match by signal files/dependencies, not by project name — portable across all matching projects.
+- **User declaration as highest priority (above skills)**: Skills provide organization-wide defaults; `.reins/commands.yaml` provides project-specific overrides. A project that uses `myco lint --strict --experimental` instead of the skill's `myco lint --strict` just adds that one line to `commands.yaml`. Partial declarations are supported: override only what's different.
 - **Interactive prompts only for missing commands**: `reins init` doesn't re-confirm auto-detected commands — that would be annoying. It only asks about null fields in the critical set (lint, test, build, dev). This minimizes user friction while closing the gap for undetectable tools.
 - **Documentation extraction at confidence 0.7**: README/CONTRIBUTING.md commands are project-specific (higher than conventions at 0.6) but may be outdated (lower than scripts at 1.0). The 0.7 score ensures docs fill gaps where nothing else is detected, but get overridden by any explicit source.
 - **Confidence scores on conventions**: Go's `golangci-lint run` is a convention — the tool might not be installed. Marking it with confidence 0.6 lets downstream consumers (CLAUDE.md generator, evaluation runner) decide whether to include it unconditionally or with a caveat. Script-sourced and taskrunner commands get 1.0 because they're explicitly configured by the project.
@@ -457,6 +522,7 @@ src/scanner/
 ├── types.ts                   # modified: adds CommandMap, ResolvedCommand, PackageInfo; extends CodebaseContext
 ├── workspace-detector.ts      # NEW: WorkspaceResolver interface + 8 resolver implementations + fallback
 ├── command-resolver.ts        # NEW: resolveCommands() + 5 language resolvers + makefile parser + taskrunner overlay
+├── skill-matcher.ts           # NEW: matchSkillCommands() — ~/.dev-harness/global-skills/ matching
 ├── user-commands.ts           # NEW: loadUserCommands() + writeUserCommands() — .reins/commands.yaml I/O
 ├── doc-extractor.ts           # NEW: extractCommandsFromDocs() — README/CONTRIBUTING.md command extraction
 ├── directory-scanner.ts       # unchanged

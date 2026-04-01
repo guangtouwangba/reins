@@ -6,6 +6,8 @@ Meanwhile, monorepo projects compound the problem: AI needs to know not just the
 
 A deeper problem: many enterprise projects rely on internal CLI tools (`myco build`, `dx test`, custom wrappers) that leave no trace in the repository. Static file analysis can never discover these. The system needs a user-declaration layer so teams can tell reins about commands that cannot be auto-detected, and an interactive init flow that asks about missing commands rather than silently guessing wrong.
 
+Furthermore, within an organization, these internal tools are used across many projects. Asking every first user of every new project the same questions ("how do you run lint?" → "myco lint --strict") is redundant. Command knowledge should be shareable as **skills** — a team installs a toolchain skill once, and all matching projects get the commands pre-populated without any interactive prompts.
+
 ## What Changes
 
 ### 1. Workspace Discovery (`src/scanner/workspace-detector.ts`)
@@ -39,13 +41,14 @@ Each resolved command includes:
 - `source` — how it was discovered: `user` (declared in commands.yaml), `script` (parsed from package.json/pyproject.toml), `taskrunner` (turbo/nx/melos), `docs` (extracted from README/CONTRIBUTING.md), `makefile` (parsed Makefile targets), `convention` (language default)
 - `confidence` — 0-1; `user` and `script` and `taskrunner` = 1.0, `docs` = 0.7, `makefile` = 0.9, `convention` = 0.6-0.8
 
-Command discovery follows a 6-layer priority chain (later layers override earlier):
+Command discovery follows a 7-layer priority chain (later layers override earlier):
 1. **Language convention** — fallback defaults per language (lowest priority)
 2. **Makefile** targets — explicit command mapping
 3. **Documentation extraction** — commands extracted from README.md / CONTRIBUTING.md code blocks
 4. **Package scripts** (package.json scripts, pyproject.toml scripts, Cargo aliases) — project-defined
 5. **Taskrunner** (turbo.json tasks, nx.json targets, melos.yaml scripts)
-6. **User declaration** (`.reins/commands.yaml`) — highest authority, always wins
+6. **Skill matching** — command skills from `~/.dev-harness/global-skills/` matched by project signals (e.g., presence of `myco.config.yaml` triggers `mycompany-toolchain` skill)
+7. **User declaration** (`.reins/commands.yaml`) — highest authority, always wins
 
 Per-language resolvers:
 
@@ -107,7 +110,38 @@ Commands detected:
 
 User answers are saved to `.reins/commands.yaml` automatically. Only unresolved commands are prompted — detected commands are not asked about. In non-interactive mode (CI, piped stdin), prompts are skipped and unresolved commands remain null.
 
-### 6. Type Extensions (`src/scanner/types.ts`)
+### 6. Command Skills (`src/scanner/skill-matcher.ts`)
+
+Command skills are reusable command definitions shared across projects — typically maintained by an infrastructure team. A skill declares which projects it applies to (via match signals) and what commands those projects use.
+
+```yaml
+# ~/.dev-harness/global-skills/mycompany-toolchain.yaml
+name: mycompany-toolchain
+type: commands
+match:
+  signals: ["myco.config.yaml", ".mycorc"]        # file existence triggers match
+  dependencies: ["@mycompany/cli"]                 # dependency presence triggers match
+commands:
+  lint: "myco lint --strict"
+  lintFix: "myco lint --strict --fix"
+  test: "dx test"
+  testSingle: "dx test {file}"
+  dev: "myco serve --hot"
+  build: "myco build"
+```
+
+During `scan()`, after auto-detection (layers 1-5) and before loading user declarations (layer 7), the skill matcher checks `~/.dev-harness/global-skills/` for command-type skills whose `match` signals are present in the project. Matched skill commands fill gaps in the `CommandMap` with `source: 'skill'`, `confidence: 1.0`.
+
+**Impact on interactive prompts:** When a skill fills a previously-null command, the interactive init prompt skips that question. If all commands are resolved via auto-detection + skills, no questions are asked at all. This is the primary UX benefit: a company installs a toolchain skill once, and every new project using those tools requires zero interactive setup.
+
+**Skill sources:**
+- Manual creation by infrastructure teams (`reins skill add <path>`)
+- Automatic extraction from cross-project learning (p5-advanced-features): when 3+ projects with the same signal file all declare the same command in `commands.yaml`, reins proposes extracting a skill
+- Remote skill registries (future): `reins skill add <url>`
+
+**Skill vs commands.yaml:** Skills provide defaults for *any matching project*. `commands.yaml` provides overrides for *this specific project*. If a project needs a command different from the skill's default, `commands.yaml` wins (layer 7 > layer 6).
+
+### 7. Type Extensions (`src/scanner/types.ts`)
 
 ```typescript
 // New types
@@ -128,7 +162,7 @@ interface CommandMap {
 
 interface ResolvedCommand {
   command:    string;
-  source:     'user' | 'script' | 'taskrunner' | 'docs' | 'makefile' | 'convention';
+  source:     'user' | 'skill' | 'script' | 'taskrunner' | 'docs' | 'makefile' | 'convention';
   confidence: number;   // 0-1
 }
 
@@ -146,7 +180,7 @@ interface CodebaseContext {
 }
 ```
 
-### 7. Scan Pipeline Change
+### 8. Scan Pipeline Change
 
 ```
 scan(projectRoot, depth, config)
@@ -157,7 +191,8 @@ scan(projectRoot, depth, config)
   ├─ detectRules()                            // existing (root level)
   ├─ extractCommandsFromDocs()                // NEW: README/CONTRIBUTING.md extraction
   ├─ resolveCommands()                        // NEW: root-level commands (layers 1-5)
-  ├─ loadUserCommands()                       // NEW: .reins/commands.yaml override (layer 6)
+  ├─ matchSkillCommands()                     // NEW: skill matching (layer 6)
+  ├─ loadUserCommands()                       // NEW: .reins/commands.yaml override (layer 7)
   ├─ analyzePatterns()                        // existing (root level)
   └─ for each package:                        // NEW: per-package loop
       ├─ scope filePaths to package
@@ -169,11 +204,11 @@ scan(projectRoot, depth, config)
   └─ applyUserPackageOverrides()              // NEW: per-package commands.yaml overrides
 ```
 
-After `scan()` returns, `reins init` checks for unresolved commands (null fields in `CommandMap`). In interactive mode, it prompts the user for each missing command. Answers are saved to `.reins/commands.yaml` and merged into the context.
+After `scan()` returns, `reins init` checks for unresolved commands (null fields in `CommandMap`). If skills and auto-detection have filled all fields, no prompts are shown. Otherwise, in interactive mode, it prompts the user for each still-missing command. Answers are saved to `.reins/commands.yaml` and merged into the context.
 
 Sub-detector signature change: `projectRoot` parameter renamed to `contextRoot`. Root-level calls pass `projectRoot`; per-package calls pass `join(projectRoot, pkg.path)`. No logic change inside the detectors — they already use `join(root, 'package.json')` which naturally becomes the correct per-package path.
 
-### 8. Generator Consumption
+### 9. Generator Consumption
 
 `constraints/generator.ts` stops hardcoding commands:
 
@@ -182,7 +217,7 @@ Sub-detector signature change: `projectRoot` parameter renamed to `contextRoot`.
 // After:  pre_commit: [context.commands.lint?.command, context.commands.typecheck?.command].filter(Boolean)
 ```
 
-### 9. CLAUDE.md Output
+### 10. CLAUDE.md Output
 
 Context generators write the resolved commands into the generated CLAUDE.md, giving AI agents an executable reference:
 
@@ -199,7 +234,7 @@ Context generators write the resolved commands into the generated CLAUDE.md, giv
 
 For monorepos, per-package commands are also listed.
 
-### 10. Evaluation Module Consolidation
+### 11. Evaluation Module Consolidation
 
 `evaluation/l0-static.ts#detectCommands()` is refactored to consume `context.commands` instead of re-detecting commands independently. The duplicated detection logic is removed.
 
@@ -208,7 +243,8 @@ For monorepos, per-package commands are also listed.
 ### New Capabilities
 
 - `workspace-discovery`: Detect and enumerate workspace packages across JS (pnpm/npm/yarn), Go (go.work), Rust (Cargo workspaces), Python (uv/poetry), and Flutter/Dart (pub workspaces/melos) ecosystems
-- `command-resolution`: Resolve executable commands for the full AI development loop (install, dev, build, lint, lintFix, typecheck, format, test, testSingle, testWatch, clean) per language with 6-layer priority chain (convention → makefile → docs → scripts → taskrunner → user declaration)
+- `command-resolution`: Resolve executable commands for the full AI development loop (install, dev, build, lint, lintFix, typecheck, format, test, testSingle, testWatch, clean) per language with 7-layer priority chain (convention → makefile → docs → scripts → taskrunner → skill → user declaration)
+- `skill-command-matching`: Match command-type skills from `~/.dev-harness/global-skills/` to projects by signal files, dependencies, or registry patterns; pre-populate commands without interactive prompts; shareable across all projects in an organization
 - `user-declared-commands`: Load `.reins/commands.yaml` as highest-priority command source for internal CLI tools, custom wrappers, and enterprise toolchains that cannot be auto-detected; supports root and per-package overrides
 - `doc-command-extraction`: Extract commands from README.md and CONTRIBUTING.md code blocks near known labels (e.g., "run tests", "install dependencies") as a medium-confidence discovery source
 - `interactive-command-init`: During `reins init`, prompt for commands that could not be auto-detected; save answers to `.reins/commands.yaml`; skip prompts in non-interactive mode
@@ -217,7 +253,7 @@ For monorepos, per-package commands are also listed.
 
 ### Modified Capabilities
 
-- `scan-entry`: `scan()` gains workspace discovery, doc extraction, command resolution, and user override phases; pipeline becomes `scanDirectory → detectWorkspaces → detectStack → detectTests → detectRules → extractCommandsFromDocs → resolveCommands → loadUserCommands → analyzePatterns → per-package loop → applyUserPackageOverrides`
+- `scan-entry`: `scan()` gains workspace discovery, doc extraction, command resolution, skill matching, and user override phases; pipeline becomes `scanDirectory → detectWorkspaces → detectStack → detectTests → detectRules → extractCommandsFromDocs → resolveCommands → matchSkillCommands → loadUserCommands → analyzePatterns → per-package loop → applyUserPackageOverrides`
 - `codebase-context`: `CodebaseContext` gains `commands: CommandMap` and `packages: PackageInfo[]` fields; `emptyCodebaseContext()` updated with empty defaults
 - `constraint-generation`: `generateConstraints()` reads `context.commands` for pipeline commands instead of hardcoding; generates per-package constraints with `extends` inheritance for monorepos
 - `context-output`: CLAUDE.md generators write a Commands section from `context.commands`; user-declared commands annotated with `(declared)`; monorepo projects get per-package command listings
@@ -234,6 +270,8 @@ For monorepos, per-package commands are also listed.
 - `l0-static.ts` loses its independent `detectCommands()` function — evaluation module gains a dependency on scanner output
 - Convention-based command resolution (Go, Rust, Flutter) may produce commands that don't work if the user hasn't installed the tool (e.g., `golangci-lint` not installed) — the `confidence` field signals this to downstream consumers; the interactive init prompt gives users the chance to correct these
 - `.reins/commands.yaml` is a new file intended to be committed to git — teams share command declarations. The file is optional; projects with fully auto-detectable commands never need it
-- `reins init` becomes interactive by default (prompts for missing commands). Non-interactive mode (CI, piped stdin) skips prompts silently — unresolved commands remain null
+- `reins init` becomes interactive by default (prompts for missing commands). Non-interactive mode (CI, piped stdin) skips prompts silently — unresolved commands remain null. When matching skills fill all gaps, no prompts are needed even in interactive mode
+- Command skills are stored in `~/.dev-harness/global-skills/` (user home, not project repo) — same location as cross-project learning skills from p5-advanced-features. Skill matching reads this directory; this change does not implement skill creation or cross-project extraction (those are in p5)
+- Skill matching adds a dependency on the `~/.dev-harness/` directory structure. If the directory does not exist, skill matching is silently skipped
 - Documentation extraction (README/CONTRIBUTING.md) uses regex-based heuristics — it may extract incorrect commands from unrelated code blocks. Confidence 0.7 ensures these are overridden by any explicit source
 - No network access required; all detection is local file-based
