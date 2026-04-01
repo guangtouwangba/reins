@@ -12,6 +12,7 @@ import omcBridge from './omc-bridge.js';
 import { evaluate } from '../evaluation/evaluator.js';
 import { buildExitCondition, shouldExit } from '../evaluation/exit-condition.js';
 import type { PipelineOpts, PipelineResult, StageResult, StageLog, ExecutionRecord } from './types.js';
+import { Tracer } from '../diagnostics/tracer.js';
 
 // ---------------------------------------------------------------------------
 // Stage definitions
@@ -62,10 +63,13 @@ export async function runPipeline(
   opts: PipelineOpts,
 ): Promise<PipelineResult> {
   const start = Date.now();
+  const tracer = new Tracer(projectRoot);
   const config = loadConfig(projectRoot);
   const constraints = loadConstraints(projectRoot);
   const profile = opts.profile ?? 'default';
   const skipStages = new Set([...(opts.skipStages ?? []), ...profileSkips(profile)]);
+
+  tracer.trace('pipeline', 'start', { task, profile, skipStages: [...skipStages] });
 
   const stageResults: Record<string, StageResult> = {};
   let failedStage: string | undefined;
@@ -76,6 +80,7 @@ export async function runPipeline(
   {
     const stageStart = Date.now();
     opts.onStageChange?.('harnessInit', 'start');
+    tracer.trace('pipeline', 'stage:harnessInit:start');
     try {
       injectedContext = injectConstraints(task, {
         profile,
@@ -88,6 +93,7 @@ export async function runPipeline(
         duration: Date.now() - stageStart,
         output: injectedContext,
       };
+      tracer.trace('pipeline', 'stage:harnessInit:end', { success: true, durationMs: Date.now() - stageStart });
       opts.onStageChange?.('harnessInit', 'complete');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -117,6 +123,7 @@ export async function runPipeline(
 
     const stageStart = Date.now();
     opts.onStageChange?.(stage, 'start');
+    tracer.trace('pipeline', `stage:${stage}:start`);
 
     try {
       let result: StageResult;
@@ -172,6 +179,7 @@ export async function runPipeline(
       }
 
       stageResults[stage] = result;
+      tracer.trace('pipeline', `stage:${stage}:end`, { success: result.success, durationMs: result.duration });
       opts.onStageChange?.(stage, result.success ? 'complete' : 'fail');
 
       if (!result.success) {
@@ -220,6 +228,8 @@ export async function runPipeline(
   };
 
   const logPath = logExecution(projectRoot, record);
+
+  tracer.trace('pipeline', 'end', { success, durationMs, failedStage });
 
   return {
     success,
