@@ -11,6 +11,7 @@ coverage/
 
 # Tool configs (local)
 .agent/
+.baoyu-skills/
 .claude/
 .codex/
 .crush/
