@@ -16,6 +16,104 @@ export interface InitOptions {
   noInput?: boolean;
 }
 
+interface SelectionItem {
+  id: string;
+  label: string;
+  desc: string;
+  selected: boolean;
+  detected: boolean;
+}
+
+function renderSelect(items: SelectionItem[], cursor: number): string {
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('Which AI tools do you use? (↑↓ move, space toggle, enter confirm)');
+  lines.push('');
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    const pointer = i === cursor ? '❯' : ' ';
+    const check = item.selected ? '◉' : '◯';
+    const det = item.detected ? ' (detected)' : '';
+    lines.push(`  ${pointer} ${check} ${item.label.padEnd(20)} ${item.desc}${det}`);
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
+async function interactiveMultiSelect(items: SelectionItem[]): Promise<string[]> {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+
+  let cursor = 0;
+
+  // Render initial state
+  let rendered = renderSelect(items, cursor);
+  stdout.write(rendered);
+
+  return new Promise<string[]>((resolve) => {
+    const wasRaw = stdin.isRaw;
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf-8');
+
+    const cleanup = () => {
+      stdin.setRawMode(wasRaw ?? false);
+      stdin.pause();
+      stdin.removeListener('data', onData);
+    };
+
+    const redraw = () => {
+      // Move cursor up to clear previous render
+      const lineCount = rendered.split('\n').length;
+      stdout.write(`\x1b[${lineCount}A\x1b[0J`);
+      rendered = renderSelect(items, cursor);
+      stdout.write(rendered);
+    };
+
+    const onData = (key: string) => {
+      // Ctrl+C
+      if (key === '\x03') {
+        cleanup();
+        process.exit(0);
+      }
+      // Enter
+      if (key === '\r' || key === '\n') {
+        cleanup();
+        resolve(items.filter(i => i.selected).map(i => i.id));
+        return;
+      }
+      // Space — toggle
+      if (key === ' ') {
+        items[cursor]!.selected = !items[cursor]!.selected;
+        redraw();
+        return;
+      }
+      // Arrow keys (escape sequences)
+      if (key === '\x1b[A' || key === 'k') {
+        // Up
+        cursor = cursor > 0 ? cursor - 1 : items.length - 1;
+        redraw();
+        return;
+      }
+      if (key === '\x1b[B' || key === 'j') {
+        // Down
+        cursor = cursor < items.length - 1 ? cursor + 1 : 0;
+        redraw();
+        return;
+      }
+      // 'a' — select all
+      if (key === 'a') {
+        const allSelected = items.every(i => i.selected);
+        for (const i of items) i.selected = !allSelected;
+        redraw();
+        return;
+      }
+    };
+
+    stdin.on('data', onData);
+  });
+}
+
 async function selectAdapters(projectRoot: string, options: InitOptions, config: ReturnType<typeof loadConfig>): Promise<string[]> {
   // Explicit --adapters flag takes priority
   if (options.adapters) {
@@ -38,47 +136,16 @@ async function selectAdapters(projectRoot: string, options: InitOptions, config:
     return detectedSet.size > 0 ? [...detectedSet] : ['claude-code'];
   }
 
-  // Interactive multi-select
-  const { createInterface } = await import('node:readline');
-
-  // Build selection state: detected tools pre-selected, claude-code always pre-selected
+  // Interactive multi-select with arrow keys + space + enter
   const selections = ADAPTER_REGISTRY.map(a => ({
     id: a.id,
     label: a.displayName,
     desc: a.description,
     selected: detectedSet.has(a.id) || a.id === 'claude-code',
+    detected: detectedSet.has(a.id),
   }));
 
-  console.log('');
-  console.log('Which AI tools do you use? (enter numbers to toggle, then press enter to confirm)');
-  console.log('');
-  for (let i = 0; i < selections.length; i++) {
-    const s = selections[i]!;
-    const check = s.selected ? '◉' : '◯';
-    const detected = detectedSet.has(s.id) ? ' (detected)' : '';
-    console.log(`  ${i + 1}. ${check} ${s.label.padEnd(20)} ${s.desc}${detected}`);
-  }
-  console.log('');
-
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise<string>(resolve => {
-    rl.question('Toggle (e.g. "2 5 6") or press enter to accept: ', ans => {
-      rl.close();
-      resolve(ans.trim());
-    });
-  });
-
-  // Parse toggle input
-  if (answer) {
-    const toggles = answer.split(/[\s,]+/).map(s => parseInt(s, 10) - 1).filter(n => !isNaN(n));
-    for (const idx of toggles) {
-      if (idx >= 0 && idx < selections.length) {
-        selections[idx]!.selected = !selections[idx]!.selected;
-      }
-    }
-  }
-
-  const result = selections.filter(s => s.selected).map(s => s.id);
+  const result = await interactiveMultiSelect(selections);
 
   // Show final selection
   console.log('');
