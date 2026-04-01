@@ -155,8 +155,12 @@ export function generateSettingsJson(projectRoot: string, hooks: HookConfig[]): 
     try {
       const raw = readFileSync(settingsPath, 'utf-8');
       existing = JSON.parse(raw) as ClaudeSettings;
-    } catch {
-      existing = {};
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Cannot parse .claude/settings.json: ${msg}. ` +
+        `Fix or remove the file before running reins.`
+      );
     }
   }
 

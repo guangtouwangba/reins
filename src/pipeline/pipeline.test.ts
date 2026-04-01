@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { filterByProfile, injectConstraints } from './constraint-injector.js';
 import { runQA } from './qa.js';
 import { logExecution } from './execution-logger.js';
-import { getDefaultConfig } from '../state/config.js';
 import type { Constraint } from '../constraints/schema.js';
 import type { InjectionContext, ExecutionRecord } from './types.js';
 
@@ -105,31 +104,32 @@ describe('runQA', () => {
   afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });
 
   it('returns passed:true with empty results when no commands configured', async () => {
-    const config = getDefaultConfig();
-    const result = await runQA(tmpDir, config);
+    const qaConfig = { pre_commit: [], post_develop: [] };
+    const result = await runQA(tmpDir, qaConfig);
     expect(result.passed).toBe(true);
     expect(result.results).toHaveLength(0);
   });
 
   it('passes when all commands succeed', async () => {
-    const config = {
-      ...getDefaultConfig(),
-      pipeline: { pre_commit: ['echo ok'], post_develop: [] },
-    } as ReturnType<typeof getDefaultConfig>;
-    const result = await runQA(tmpDir, config);
+    const qaConfig = { pre_commit: ['echo ok'], post_develop: [] };
+    const result = await runQA(tmpDir, qaConfig);
     expect(result.passed).toBe(true);
     expect(result.results).toHaveLength(1);
     expect(result.results[0]?.success).toBe(true);
   });
 
   it('stops on first failure', async () => {
-    const config = {
-      ...getDefaultConfig(),
-      pipeline: { pre_commit: ['exit 1'], post_develop: ['echo should-not-run'] },
-    } as ReturnType<typeof getDefaultConfig>;
-    const result = await runQA(tmpDir, config);
+    const qaConfig = { pre_commit: ['exit 1'], post_develop: ['echo should-not-run'] };
+    const result = await runQA(tmpDir, qaConfig);
     expect(result.passed).toBe(false);
     expect(result.results).toHaveLength(1);
+  });
+
+  it('runs both pre_commit and post_develop commands', async () => {
+    const qaConfig = { pre_commit: ['echo pre'], post_develop: ['echo post'] };
+    const result = await runQA(tmpDir, qaConfig);
+    expect(result.passed).toBe(true);
+    expect(result.results).toHaveLength(2);
   });
 });
 

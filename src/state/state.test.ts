@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildManifest, saveManifest, loadManifest, diffManifest } from './manifest.js';
+import { buildManifest, buildReinsManifest, saveManifest, loadManifest, diffManifest } from './manifest.js';
 import { saveSnapshot, listSnapshots, restoreSnapshot } from './snapshot.js';
 
 let tmpDir: string;
@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe('manifest', () => {
   it('saves and loads a manifest', () => {
-    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
+    writeFileSync(join(tmpDir, 'package.json'), '{"name":"test"}', 'utf-8');
 
     const manifest = buildManifest(tmpDir);
     saveManifest(tmpDir, manifest);
@@ -36,18 +36,42 @@ describe('manifest', () => {
     expect(result).toBeNull();
   });
 
-  it('buildManifest captures files in .reins/', () => {
+  it('buildManifest scans project input files, not .reins/', () => {
+    writeFileSync(join(tmpDir, 'package.json'), '{"name":"test"}', 'utf-8');
+    writeFileSync(join(tmpDir, 'tsconfig.json'), '{}', 'utf-8');
+    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
+
+    const manifest = buildManifest(tmpDir);
+    const paths = manifest.files.map(f => f.path);
+    // Should include project files
+    expect(paths.some(p => p === 'package.json')).toBe(true);
+    expect(paths.some(p => p === 'tsconfig.json')).toBe(true);
+    // Should NOT include .reins/ artifacts
+    expect(paths.some(p => p.startsWith('.reins/'))).toBe(false);
+  });
+
+  it('buildReinsManifest scans .reins/ directory (legacy behavior)', () => {
     writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
     writeFileSync(join(tmpDir, '.reins', 'config.yaml'), 'key: value\n', 'utf-8');
 
-    const manifest = buildManifest(tmpDir);
+    const manifest = buildReinsManifest(tmpDir);
     expect(manifest.files.length).toBeGreaterThanOrEqual(2);
     const paths = manifest.files.map(f => f.path);
     expect(paths.some(p => p.includes('constraints.yaml'))).toBe(true);
   });
 
+  it('buildManifest excludes node_modules and .git', () => {
+    writeFileSync(join(tmpDir, 'index.ts'), 'export {}', 'utf-8');
+    mkdirSync(join(tmpDir, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(join(tmpDir, 'node_modules', 'pkg', 'index.js'), '', 'utf-8');
+
+    const manifest = buildManifest(tmpDir);
+    const paths = manifest.files.map(f => f.path);
+    expect(paths.some(p => p.includes('node_modules'))).toBe(false);
+  });
+
   it('hash is deterministic for same content', () => {
-    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
+    writeFileSync(join(tmpDir, 'package.json'), '{"name":"test"}', 'utf-8');
 
     const m1 = buildManifest(tmpDir);
     const m2 = buildManifest(tmpDir);
@@ -57,7 +81,7 @@ describe('manifest', () => {
 
 describe('diffManifest', () => {
   it('reports no changes for identical manifests', () => {
-    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
+    writeFileSync(join(tmpDir, 'package.json'), '{"name":"test"}', 'utf-8');
     const m = buildManifest(tmpDir);
     const diff = diffManifest(m, m);
     expect(diff.hasChanges).toBe(false);
@@ -68,7 +92,7 @@ describe('diffManifest', () => {
 
   it('detects added files', () => {
     const m1 = buildManifest(tmpDir);
-    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
+    writeFileSync(join(tmpDir, 'newfile.ts'), 'export {}', 'utf-8');
     const m2 = buildManifest(tmpDir);
 
     const diff = diffManifest(m1, m2);
@@ -77,10 +101,10 @@ describe('diffManifest', () => {
   });
 
   it('detects removed files', () => {
-    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
+    writeFileSync(join(tmpDir, 'package.json'), '{"name":"test"}', 'utf-8');
     const m1 = buildManifest(tmpDir);
 
-    // Create manifest without constraints.yaml
+    // Create manifest without any files
     const m2 = { ...m1, files: [] };
     const diff = diffManifest(m1, m2);
     expect(diff.hasChanges).toBe(true);
@@ -150,5 +174,23 @@ describe('snapshot', () => {
 
   it('throws when restoring non-existent snapshot', () => {
     expect(() => restoreSnapshot(tmpDir, 'nonexistent')).toThrow();
+  });
+
+  it('restore deletes captured top-level files absent from snapshot', () => {
+    // Create a snapshot WITHOUT constraints.yaml
+    mkdirSync(join(tmpDir, '.reins', 'snapshots', 'empty-snap'), { recursive: true });
+    writeFileSync(
+      join(tmpDir, '.reins', 'snapshots', 'empty-snap', 'snapshot.json'),
+      JSON.stringify({ id: 'empty-snap', createdAt: new Date().toISOString(), trigger: 'test', files: [] }),
+      'utf-8',
+    );
+
+    // Create constraints.yaml on disk
+    writeFileSync(join(tmpDir, '.reins', 'constraints.yaml'), 'version: 1\n', 'utf-8');
+    expect(existsSync(join(tmpDir, '.reins', 'constraints.yaml'))).toBe(true);
+
+    // Restore the empty snapshot — constraints.yaml should be deleted
+    restoreSnapshot(tmpDir, 'empty-snap');
+    expect(existsSync(join(tmpDir, '.reins', 'constraints.yaml'))).toBe(false);
   });
 });

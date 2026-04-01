@@ -6,6 +6,7 @@ import { loadConfig } from '../state/config.js';
 import type { Constraint, ConstraintsConfig } from '../constraints/schema.js';
 import { injectConstraints } from './constraint-injector.js';
 import { runQA } from './qa.js';
+import type { QAConfig } from './qa.js';
 import { logExecution } from './execution-logger.js';
 import omcBridge from './omc-bridge.js';
 import { evaluate } from '../evaluation/evaluator.js';
@@ -37,6 +38,17 @@ function loadConstraints(projectRoot: string): Constraint[] {
     return config.constraints ?? [];
   } catch {
     return [];
+  }
+}
+
+function loadConstraintsConfig(projectRoot: string): ConstraintsConfig | null {
+  const constraintsPath = join(projectRoot, '.reins', 'constraints.yaml');
+  if (!existsSync(constraintsPath)) return null;
+  try {
+    const raw = readFileSync(constraintsPath, 'utf-8');
+    return yaml.load(raw) as ConstraintsConfig;
+  } catch {
+    return null;
   }
 }
 
@@ -136,14 +148,21 @@ export async function runPipeline(
           `ralph: ${JSON.stringify(ralphResult)}`,
         ].join('\n');
 
+        const gatesPassed = exitCond.L0_passed && !exitDecision.exit;
         result = {
-          success: ralphResult.success,
+          success: ralphResult.success && gatesPassed,
           duration: Date.now() - stageStart,
           output,
+          ...(!gatesPassed ? { error: `Evaluation gates failed: ${exitDecision.reason}` } : {}),
         };
       } else {
         // qa
-        const qaResult = await runQA(projectRoot, config);
+        const constraintsConfig = loadConstraintsConfig(projectRoot);
+        const qaConfig: QAConfig = {
+          pre_commit: constraintsConfig?.pipeline?.pre_commit ?? [],
+          post_develop: constraintsConfig?.pipeline?.post_develop ?? [],
+        };
+        const qaResult = await runQA(projectRoot, qaConfig);
         result = {
           success: qaResult.passed,
           duration: Date.now() - stageStart,

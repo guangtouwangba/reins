@@ -88,9 +88,8 @@ export async function runUpdate(options: { autoApply?: boolean }): Promise<void>
     return;
   }
 
-  const autoApplyFilter = options.autoApply
-    ? (c: Constraint) => ((c as unknown as { confidence?: number }).confidence !== undefined ? (c as unknown as { confidence: number }).confidence >= 90 : true)
-    : () => true;
+  // Auto-apply: apply all non-conflicting changes (conflicts are already excluded from `result.added`)
+  const autoApplyFilter = () => true;
 
   // Compose final constraint list
   const finalConstraints: Constraint[] = [
@@ -107,7 +106,10 @@ export async function runUpdate(options: { autoApply?: boolean }): Promise<void>
   // Write updated constraints
   const { writeConstraintsFile } = await import('../constraints/generator.js');
   writeConstraintsFile(projectRoot, finalConstraints, context);
-  saveManifest(projectRoot, currManifest);
+
+  // Rebuild manifest after writes so next update sees correct baseline
+  const postWriteManifest = buildManifest(projectRoot);
+  saveManifest(projectRoot, postWriteManifest);
 
   console.log('');
   console.log(`Updated .reins/constraints.yaml (${finalConstraints.length} constraints).`);

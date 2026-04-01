@@ -142,4 +142,12 @@ export function restoreSnapshot(projectRoot: string, snapshotId: string): void {
       // skip
     }
   }
+
+  // Remove captured top-level files absent from snapshot
+  for (const file of CAPTURED_FILES) {
+    const fullPath = join(reinsDir, file);
+    if (existsSync(fullPath) && !restoredPaths.has(file)) {
+      unlinkSync(fullPath);
+    }
+  }
 }

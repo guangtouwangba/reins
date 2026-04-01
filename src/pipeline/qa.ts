@@ -1,6 +1,10 @@
 import { exec } from 'node:child_process';
-import type { ReinsConfig } from '../state/config.js';
 import type { QAResult, CommandResult } from './types.js';
+
+export interface QAConfig {
+  pre_commit: string[];
+  post_develop: string[];
+}
 
 function runCommand(command: string, cwd: string): Promise<CommandResult> {
   const start = Date.now();
@@ -19,13 +23,8 @@ function runCommand(command: string, cwd: string): Promise<CommandResult> {
   });
 }
 
-export async function runQA(projectRoot: string, config: ReinsConfig): Promise<QAResult> {
-  // ReinsConfig doesn't have pipeline directly — constraints.yaml has it.
-  // The runner passes the full config; we handle missing pipeline gracefully.
-  const pipeline = (config as unknown as { pipeline?: { pre_commit?: string[]; post_develop?: string[] } }).pipeline;
-  const preCommit: string[] = pipeline?.pre_commit ?? [];
-  const postDevelop: string[] = pipeline?.post_develop ?? [];
-  const commands = [...preCommit, ...postDevelop];
+export async function runQA(projectRoot: string, qaConfig: QAConfig): Promise<QAResult> {
+  const commands = [...qaConfig.pre_commit, ...qaConfig.post_develop];
 
   if (commands.length === 0) {
     return { passed: true, results: [] };

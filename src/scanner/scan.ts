@@ -11,10 +11,15 @@ import { join } from 'node:path';
 
 export type ScanDepth = 'L0' | 'L0-L1' | 'L0-L2';
 
+export interface ScanOptions {
+  dryRun?: boolean;
+}
+
 export async function scan(
   projectRoot: string,
   depth: ScanDepth = 'L0-L2',
   config?: ReinsConfig,
+  options?: ScanOptions,
 ): Promise<CodebaseContext> {
   const excludeDirs = [
     'node_modules', '.git', 'dist', 'build', 'vendor', 'generated',
@@ -64,16 +69,18 @@ export async function scan(
   }
 
   // Write output artifacts
-  const reinsDir = join(projectRoot, '.reins');
-  if (!existsSync(reinsDir)) mkdirSync(reinsDir, { recursive: true });
+  if (!options?.dryRun) {
+    const reinsDir = join(projectRoot, '.reins');
+    if (!existsSync(reinsDir)) mkdirSync(reinsDir, { recursive: true });
 
-  writeFileSync(join(reinsDir, 'context.json'), JSON.stringify(context, null, 2));
-  writeFileSync(join(reinsDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  writeFileSync(join(reinsDir, 'patterns.json'), JSON.stringify({
-    stack: context.stack,
-    architecture: context.architecture,
-    conventions: context.conventions,
-  }, null, 2));
+    writeFileSync(join(reinsDir, 'context.json'), JSON.stringify(context, null, 2));
+    writeFileSync(join(reinsDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    writeFileSync(join(reinsDir, 'patterns.json'), JSON.stringify({
+      stack: context.stack,
+      architecture: context.architecture,
+      conventions: context.conventions,
+    }, null, 2));
+  }
 
   return context;
 }

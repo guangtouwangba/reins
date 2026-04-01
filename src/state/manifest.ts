@@ -30,9 +30,10 @@ export interface ManifestDiff {
   hasChanges: boolean;
 }
 
-function collectFiles(dir: string, projectRoot: string): { files: FileEntry[]; dirs: DirectoryEntry[] } {
+function collectFiles(dir: string, projectRoot: string, excludeDirs?: string[]): { files: FileEntry[]; dirs: DirectoryEntry[] } {
   const files: FileEntry[] = [];
   const dirs: DirectoryEntry[] = [];
+  const excluded = new Set(excludeDirs ?? []);
 
   if (!existsSync(dir)) return { files, dirs };
 
@@ -55,6 +56,7 @@ function collectFiles(dir: string, projectRoot: string): { files: FileEntry[]; d
       }
 
       if (stat.isDirectory()) {
+        if (excluded.has(entry)) continue;
         walk(fullPath);
         dirs.push({ path: relative(projectRoot, fullPath), fileCount: 0 });
       } else {
@@ -82,7 +84,34 @@ function computeHash(files: FileEntry[]): string {
   return createHash('sha256').update(canonical).digest('hex');
 }
 
-export function buildManifest(projectRoot: string): Manifest {
+export interface BuildManifestOptions {
+  /** Directories to scan for project input files (default: project root) */
+  scanRoot?: string;
+  /** Directories to exclude */
+  excludeDirs?: string[];
+}
+
+const DEFAULT_EXCLUDE_DIRS = ['node_modules', '.git', 'dist', 'build', '.reins', 'vendor', 'generated'];
+
+export function buildManifest(projectRoot: string, options?: BuildManifestOptions): Manifest {
+  const scanRoot = options?.scanRoot ?? projectRoot;
+  const excludeDirs = [...DEFAULT_EXCLUDE_DIRS, ...(options?.excludeDirs ?? [])];
+
+  const { files, dirs } = collectFiles(scanRoot, projectRoot, excludeDirs);
+  const hash = computeHash(files);
+
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    projectRoot,
+    directories: dirs,
+    files,
+    hash,
+  };
+}
+
+/** Build a manifest scoped to the .reins/ directory (legacy behavior). */
+export function buildReinsManifest(projectRoot: string): Manifest {
   const reinsDir = join(projectRoot, '.reins');
   const { files, dirs } = collectFiles(reinsDir, projectRoot);
   const hash = computeHash(files);

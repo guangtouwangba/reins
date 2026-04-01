@@ -13,8 +13,6 @@ program
   .description('Initialize project constraints')
   .option('-d, --depth <depth>', 'Scan depth (L0, L0-L1, L0-L2)', 'L0-L2')
   .option('--dry-run', 'Preview changes without writing files')
-  .option('--force', 'Overwrite existing .reins/ configuration')
-  .option('--diff', 'Show diff against existing configuration')
   .action(async (options) => {
     const { initCommand } = await import('./commands/init.js');
     await initCommand(process.cwd(), options);

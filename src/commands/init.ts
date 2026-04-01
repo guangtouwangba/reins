@@ -9,8 +9,6 @@ import type { ScanDepth } from '../scanner/scan.js';
 export interface InitOptions {
   depth: string;
   dryRun?: boolean;
-  force?: boolean;
-  diff?: boolean;
 }
 
 export async function initCommand(projectRoot: string, options: InitOptions): Promise<void> {
@@ -22,7 +20,7 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   const config = loadConfig(projectRoot);
 
   // 2. Scan
-  const context = await scan(projectRoot, depth, config);
+  const context = await scan(projectRoot, depth, config, { dryRun: options.dryRun });
 
   // 3. Generate constraints
   const constraints = generateConstraints(context, projectRoot);

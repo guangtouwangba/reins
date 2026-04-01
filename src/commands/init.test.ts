@@ -53,11 +53,16 @@ describe('initCommand', () => {
     expect(lineCount).toBeLessThan(50);
   });
 
-  it('dry-run does not write any files', async () => {
+  it('dry-run creates zero files (.reins/ and adapter outputs)', async () => {
     await initCommand(tmpDir, { depth: 'L0-L2', dryRun: true });
 
+    // No adapter outputs
     expect(existsSync(join(tmpDir, 'CLAUDE.md'))).toBe(false);
-    // .reins dir may be created by scan(), but constraints.yaml should not exist
+    // No constraints file
     expect(existsSync(join(tmpDir, '.reins', 'constraints.yaml'))).toBe(false);
+    // scan() should also not write context.json / manifest.json / patterns.json
+    expect(existsSync(join(tmpDir, '.reins', 'context.json'))).toBe(false);
+    expect(existsSync(join(tmpDir, '.reins', 'manifest.json'))).toBe(false);
+    expect(existsSync(join(tmpDir, '.reins', 'patterns.json'))).toBe(false);
   });
 });

@@ -206,6 +206,14 @@ describe('generateSettingsJson', () => {
     expect(allCommands).toContain('/tmp/no-sql.sh');
   });
 
+  it('throws on malformed .claude/settings.json', () => {
+    const claudeDir = join(projectRoot, '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    writeFileSync(join(claudeDir, 'settings.json'), '{invalid json!!!', 'utf-8');
+
+    expect(() => generateSettingsJson(projectRoot, [])).toThrow(/Cannot parse .claude\/settings.json/);
+  });
+
   it('preserves user-managed hooks on regeneration', () => {
     // Write an existing settings.json with a user hook (no _reins marker)
     const claudeDir = join(projectRoot, '.claude');
