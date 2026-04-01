@@ -22,15 +22,16 @@ async function selectAdapters(projectRoot: string, options: InitOptions, config:
     return options.adapters.split(',').map(s => s.trim()).filter(Boolean);
   }
 
-  // Check if already configured
-  if (config.adapters?.enabled?.length > 0) {
-    return config.adapters.enabled;
-  }
-
   // Auto-detect installed tools
   const detectedSet = new Set(
     ADAPTER_REGISTRY.filter(a => a.detect(projectRoot)).map(a => a.id),
   );
+
+  // If already configured, use as pre-selection hints but still allow changing
+  const savedEnabled = config.adapters?.enabled ?? [];
+  if (savedEnabled.length > 0) {
+    for (const id of savedEnabled) detectedSet.add(id);
+  }
 
   // Non-interactive: use detected or default to claude-code
   if (options.noInput || !process.stdin.isTTY) {
