@@ -13,16 +13,20 @@ import { evaluate } from '../evaluation/evaluator.js';
 import { buildExitCondition, shouldExit } from '../evaluation/exit-condition.js';
 import type { PipelineOpts, PipelineResult, StageResult, StageLog, ExecutionRecord } from './types.js';
 import { Tracer } from '../diagnostics/tracer.js';
+import { refineRequirements } from './requirement-refiner.js';
+import { generateDesign } from './design-generator.js';
+import { generateTasks } from './task-generator.js';
+import { loadSpec, writeSpecFile, updateSpecStatus } from '../state/specs.js';
 
 // ---------------------------------------------------------------------------
 // Stage definitions
 // ---------------------------------------------------------------------------
 
-const ALL_STAGES = ['harnessInit', 'ralplan', 'execution', 'ralph', 'qa'] as const;
+const ALL_STAGES = ['requirementRefine', 'designGenerate', 'taskGenerate', 'harnessInit', 'ralplan', 'execution', 'ralph', 'qa'] as const;
 type StageName = (typeof ALL_STAGES)[number];
 
 function profileSkips(profile: string): string[] {
-  if (profile === 'relaxed') return ['ralplan', 'ralph', 'qa'];
+  if (profile === 'relaxed') return ['requirementRefine', 'designGenerate', 'taskGenerate', 'ralplan', 'ralph', 'qa'];
   return [];
 }
 
@@ -75,6 +79,97 @@ export async function runPipeline(
   let failedStage: string | undefined;
   let pipelineError: string | undefined;
   let injectedContext = '';
+  let specId: string | undefined;
+
+  // REQUIREMENT_REFINE
+  if (!failedStage && !skipStages.has('requirementRefine')) {
+    const stageStart = Date.now();
+    opts.onStageChange?.('requirementRefine', 'start');
+    tracer.trace('pipeline', 'stage:requirementRefine:start');
+    try {
+      const { scan } = await import('../scanner/scan.js');
+      const reinsConfig = loadConfig(projectRoot);
+      const context = await scan(projectRoot, 'L0-L2', reinsConfig, { dryRun: true });
+      specId = await refineRequirements(task, context, constraints, projectRoot, { noInput: opts.noInput });
+      stageResults['requirementRefine'] = { success: true, duration: Date.now() - stageStart, output: specId };
+      opts.onStageChange?.('requirementRefine', 'complete');
+      tracer.trace('pipeline', 'stage:requirementRefine:end', { success: true, specId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      stageResults['requirementRefine'] = { success: false, duration: Date.now() - stageStart, output: '', error: msg };
+      failedStage = 'requirementRefine';
+      pipelineError = msg;
+      opts.onStageChange?.('requirementRefine', 'fail');
+      tracer.trace('pipeline', 'stage:requirementRefine:error', { error: msg });
+    }
+  } else if (!failedStage) {
+    opts.onStageChange?.('requirementRefine', 'skip');
+    stageResults['requirementRefine'] = { success: true, duration: 0, output: '', skipped: true };
+  }
+
+  // DESIGN_GENERATE
+  if (!failedStage && !skipStages.has('designGenerate')) {
+    const stageStart = Date.now();
+    opts.onStageChange?.('designGenerate', 'start');
+    tracer.trace('pipeline', 'stage:designGenerate:start');
+    try {
+      const { scan } = await import('../scanner/scan.js');
+      const reinsConfig = loadConfig(projectRoot);
+      const context = await scan(projectRoot, 'L0-L2', reinsConfig, { dryRun: true });
+      const specBundle = specId ? loadSpec(projectRoot, specId) : null;
+      const specContent = specBundle?.specContent ?? '';
+      const designContent = await generateDesign({ specContent, context, constraints });
+      if (specId) {
+        writeSpecFile(projectRoot, specId, 'design.md', designContent);
+        updateSpecStatus(projectRoot, specId, 'in-progress');
+      }
+      stageResults['designGenerate'] = { success: true, duration: Date.now() - stageStart, output: designContent };
+      opts.onStageChange?.('designGenerate', 'complete');
+      tracer.trace('pipeline', 'stage:designGenerate:end', { success: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      stageResults['designGenerate'] = { success: false, duration: Date.now() - stageStart, output: '', error: msg };
+      failedStage = 'designGenerate';
+      pipelineError = msg;
+      opts.onStageChange?.('designGenerate', 'fail');
+      tracer.trace('pipeline', 'stage:designGenerate:error', { error: msg });
+    }
+  } else if (!failedStage) {
+    opts.onStageChange?.('designGenerate', 'skip');
+    stageResults['designGenerate'] = { success: true, duration: 0, output: '', skipped: true };
+  }
+
+  // TASK_GENERATE
+  if (!failedStage && !skipStages.has('taskGenerate')) {
+    const stageStart = Date.now();
+    opts.onStageChange?.('taskGenerate', 'start');
+    tracer.trace('pipeline', 'stage:taskGenerate:start');
+    try {
+      const specBundle = specId ? loadSpec(projectRoot, specId) : null;
+      const tasksContent = await generateTasks({
+        designContent: specBundle?.designContent ?? '',
+        specContent: specBundle?.specContent ?? '',
+        constraints,
+      });
+      if (specId) {
+        writeSpecFile(projectRoot, specId, 'tasks.md', tasksContent);
+        updateSpecStatus(projectRoot, specId, 'in-progress');
+      }
+      stageResults['taskGenerate'] = { success: true, duration: Date.now() - stageStart, output: tasksContent };
+      opts.onStageChange?.('taskGenerate', 'complete');
+      tracer.trace('pipeline', 'stage:taskGenerate:end', { success: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      stageResults['taskGenerate'] = { success: false, duration: Date.now() - stageStart, output: '', error: msg };
+      failedStage = 'taskGenerate';
+      pipelineError = msg;
+      opts.onStageChange?.('taskGenerate', 'fail');
+      tracer.trace('pipeline', 'stage:taskGenerate:error', { error: msg });
+    }
+  } else if (!failedStage) {
+    opts.onStageChange?.('taskGenerate', 'skip');
+    stageResults['taskGenerate'] = { success: true, duration: 0, output: '', skipped: true };
+  }
 
   // HARNESS_INIT — always runs
   {

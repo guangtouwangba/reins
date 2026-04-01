@@ -20,19 +20,46 @@ program
 
 program
   .command('develop <task>')
-  .description('Auto-develop under constraints')
+  .description('Auto-develop under constraints (spec generation available)')
   .option('-p, --profile <profile>', 'Constraint profile', 'default')
-  .option('--skip <stages>', 'Skip pipeline stages (comma-separated)')
+  .option('--skip <stages>', 'Skip pipeline stages (comma-separated: spec,design,qa,planning)')
+  .option('--spec <path>', 'Load existing spec from path')
+  .option('--no-input', 'Non-interactive mode (skip all prompts)')
   .option('--dry-run', 'Generate plan only, no code changes')
   .action(async (task, options) => {
-    console.log('The develop command is not yet available.');
-    console.log('');
-    console.log('Current workflow:');
-    console.log('  1. reins init          — generate constraints');
-    console.log('  2. reins status        — check constraint status');
-    console.log('  3. reins update        — update constraints after project changes');
-    console.log('');
-    console.log('The develop command will enable AI-driven development under constraints in a future release.');
+    const { runPipeline } = await import('./pipeline/runner.js');
+    const skipStages: string[] = [];
+    if (options.skip) {
+      const parts = (options.skip as string).split(',').map((s: string) => s.trim());
+      for (const part of parts) {
+        if (part === 'spec') skipStages.push('requirementRefine');
+        else if (part === 'design') skipStages.push('designGenerate');
+        else if (part === 'planning') { skipStages.push('requirementRefine'); skipStages.push('designGenerate'); }
+        else if (part === 'qa') skipStages.push('qa');
+        else skipStages.push(part);
+      }
+    }
+    const result = await runPipeline(task, process.cwd(), {
+      profile: options.profile ?? 'default',
+      skipStages,
+      specPath: options.spec,
+      noInput: options.noInput ?? !process.stdin.isTTY,
+      onStageChange: (stage, status) => {
+        if (status === 'start') console.log(`  [${stage}] starting...`);
+        else if (status === 'complete') console.log(`  [${stage}] ✓`);
+        else if (status === 'skip') console.log(`  [${stage}] skipped`);
+        else if (status === 'fail') console.log(`  [${stage}] ✗`);
+      },
+    });
+    if (result.success) {
+      console.log('');
+      console.log('Pipeline completed successfully.');
+    } else {
+      console.log('');
+      console.log(`Pipeline failed at stage: ${result.failedStage}`);
+      if (result.error) console.log(`Error: ${result.error}`);
+      process.exitCode = 1;
+    }
   });
 
 program

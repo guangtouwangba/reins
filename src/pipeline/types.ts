@@ -6,6 +6,8 @@ export type Profile = 'default' | 'strict' | 'relaxed' | 'fullstack' | string;
 export interface PipelineOpts {
   profile: Profile;
   skipStages?: string[];
+  specPath?: string;
+  noInput?: boolean;
   onStageChange?: (stage: string, status: 'start' | 'complete' | 'skip' | 'fail') => void;
 }
 
