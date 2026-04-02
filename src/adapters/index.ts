@@ -37,3 +37,5 @@ import './amazon-q.js';
 import './augment.js';
 import './aider.js';
 import './gemini.js';
+import './opencode.js';
+import './antigravity.js';
