@@ -1,5 +1,7 @@
 import type { CodebaseContext } from '../scanner/types.js';
 import type { Constraint } from '../constraints/schema.js';
+import { getLLMProvider } from '../llm/index.js';
+import { parseLLMJson } from '../llm/provider.js';
 
 export interface Question {
   id: string;
@@ -95,15 +97,47 @@ function getDeps(context: CodebaseContext): Set<string> {
   return deps;
 }
 
-// Layer 3: Task-specific LLM questions (stub — returns empty until LLM is wired)
+// Layer 3: Task-specific LLM questions
 async function generateTaskSpecificQuestions(
-  _task: string,
-  _context: CodebaseContext,
-  _alreadyInferred: InferredFact[],
+  task: string,
+  context: CodebaseContext,
+  alreadyInferred: InferredFact[],
 ): Promise<Question[]> {
-  // Stub: in a real implementation, this calls an LLM (haiku) to generate
-  // task-specific questions. Returns empty array until LLM integration.
-  return [];
+  const inferredSummary = alreadyInferred.map(f => `- ${f.dimension}: ${f.fact}`).join('\n');
+  const stackSummary = [...context.stack.framework, ...context.stack.language].filter(Boolean).join(', ');
+
+  const prompt = `You are a requirements analyst. Given this development task, generate 2-5 additional questions that would help clarify implementation details.
+
+Task: ${task}
+Tech Stack: ${stackSummary || 'unknown'}
+
+Already inferred facts:
+${inferredSummary || '(none)'}
+
+Return a JSON array of question objects with this shape:
+[{"id": "task-1", "dimension": "performance", "text": "...", "priority": "important", "default": "..."}]
+
+Priority must be one of: "blocking", "important", "optional".
+Only ask questions NOT covered by the inferred facts above.
+Respond with ONLY the JSON array, no markdown fences.`;
+
+  try {
+    const raw = await getLLMProvider().complete(prompt, { model: 'haiku' });
+    const parsed = parseLLMJson<Array<Partial<Question>>>(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter(q => q.id && q.text && q.dimension)
+      .map((q, i) => ({
+        id: q.id ?? `task-${i + 1}`,
+        dimension: q.dimension!,
+        text: q.text!,
+        priority: (['blocking', 'important', 'optional'].includes(q.priority ?? '') ? q.priority! : 'optional') as Question['priority'],
+        ...(q.default ? { default: q.default } : {}),
+      }));
+  } catch {
+    return [];
+  }
 }
 
 // Main entry point

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import yaml from 'js-yaml';
 import { saveSnapshot } from '../state/snapshot.js';
 import type { ConstraintsConfig } from '../constraints/schema.js';
+import { getLLMProvider } from '../llm/index.js';
 
 function loadConstraintsConfig(projectRoot: string): ConstraintsConfig | null {
   const path = join(projectRoot, '.reins', 'constraints.yaml');
@@ -125,6 +126,34 @@ export async function runHookAdd(projectRoot: string, description: string): Prom
     return;
   }
 
+  // Generate hook_check via LLM
+  let hookCheck = `# Hook for: ${description}`;
+  try {
+    const prompt = `You are generating a shell check snippet for a Claude Code hook constraint.
+
+The constraint description is: "${description}"
+
+Generate a short shell script snippet (1-5 lines) that checks if a tool input violates this constraint.
+The snippet receives the tool input via stdin as JSON. It should:
+- Exit 0 if the input is acceptable
+- Exit 2 with an error message to stderr if the input violates the constraint
+
+Example for "no raw SQL queries":
+\`\`\`
+INPUT=$(cat)
+if echo "$INPUT" | grep -qiE '(SELECT|INSERT|UPDATE|DELETE|DROP)\\s'; then
+  echo "Constraint violation: Use ORM instead of raw SQL" >&2
+  exit 2
+fi
+exit 0
+\`\`\`
+
+Respond with ONLY the shell script snippet, no markdown fences, no explanation.`;
+    hookCheck = await getLLMProvider().complete(prompt, { model: 'haiku' });
+  } catch {
+    // Fall back to placeholder on LLM failure
+  }
+
   const newConstraint = {
     id,
     rule: description,
@@ -136,7 +165,7 @@ export async function runHookAdd(projectRoot: string, description: string): Prom
       hook: true,
       hook_type: 'pre_bash' as const,
       hook_mode: 'warn' as const,
-      hook_check: `# Hook for: ${description}`,
+      hook_check: hookCheck,
     },
     status: 'draft' as const,
   };

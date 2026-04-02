@@ -50,6 +50,67 @@ export interface AnalysisResult {
 }
 
 // ---------------------------------------------------------------------------
+// detectEfficientPatterns
+// ---------------------------------------------------------------------------
+
+function detectEfficientPatterns(observations: ExecutionObservation[]): EfficientPattern[] {
+  if (observations.length < 2) return [];
+
+  // Split observations into fast and slow groups by median duration
+  const sorted = [...observations].sort((a, b) => a.duration - b.duration);
+  const median = sorted[Math.floor(sorted.length / 2)]!.duration;
+
+  const fast = observations.filter(o => o.duration <= median && o.outcome === 'success');
+  const slow = observations.filter(o => o.duration > median);
+
+  if (fast.length === 0 || slow.length === 0) return [];
+
+  // Count tool usage frequency in fast vs slow groups
+  const fastToolCounts = new Map<string, number>();
+  const slowToolCounts = new Map<string, number>();
+
+  for (const obs of fast) {
+    for (const tool of obs.toolsUsed) {
+      fastToolCounts.set(tool.name, (fastToolCounts.get(tool.name) ?? 0) + tool.count);
+    }
+  }
+  for (const obs of slow) {
+    for (const tool of obs.toolsUsed) {
+      slowToolCounts.set(tool.name, (slowToolCounts.get(tool.name) ?? 0) + tool.count);
+    }
+  }
+
+  const patterns: EfficientPattern[] = [];
+
+  // Tools used more in fast sessions (normalized per session)
+  for (const [tool, fastCount] of fastToolCounts) {
+    const slowCount = slowToolCounts.get(tool) ?? 0;
+    const fastRate = fastCount / fast.length;
+    const slowRate = slowCount / slow.length;
+
+    if (fastRate > slowRate * 1.5 && fastRate >= 2) {
+      patterns.push({
+        pattern: `Tool "${tool}" correlates with faster completions (${fastRate.toFixed(1)}/session vs ${slowRate.toFixed(1)}/session)`,
+        speedup: fastRate / Math.max(slowRate, 0.1),
+      });
+    }
+  }
+
+  // Fast sessions with fewer agent switches
+  const avgFastAgents = fast.reduce((s, o) => s + o.agentsUsed.length, 0) / fast.length;
+  const avgSlowAgents = slow.reduce((s, o) => s + o.agentsUsed.length, 0) / slow.length;
+
+  if (avgSlowAgents > avgFastAgents * 1.5 && avgSlowAgents >= 2) {
+    patterns.push({
+      pattern: `Fewer agent switches correlate with speed (fast: ${avgFastAgents.toFixed(1)}, slow: ${avgSlowAgents.toFixed(1)})`,
+      speedup: avgSlowAgents / Math.max(avgFastAgents, 0.1),
+    });
+  }
+
+  return patterns;
+}
+
+// ---------------------------------------------------------------------------
 // analyzeExecutions
 // ---------------------------------------------------------------------------
 
@@ -117,8 +178,7 @@ export async function analyzeExecutions(projectRoot: string): Promise<AnalysisRe
     }
   }
 
-  // Efficient patterns: placeholder — tool sequence analysis would require richer data
-  const efficientPatterns: EfficientPattern[] = [];
+  const efficientPatterns = detectEfficientPatterns(observations);
 
   // Build suggested actions from patterns
   const suggestedActions: Action[] = [];

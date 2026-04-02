@@ -1,3 +1,5 @@
+import { getLLMProvider } from '../llm/index.js';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -131,13 +133,17 @@ export async function runL4Semantic(
   changedFiles: FileChange[],
   results: VerificationResult,
 ): Promise<SemanticReviewResult> {
-  // LLM call stub — returns default 70 confidence
-  // In production this would call the configured LLM model with buildSemanticPrompt()
-  // and parse the response with parseSemanticResult()
-  return {
-    confidence: 70,
-    completeness: 'stub — LLM call not yet wired',
-    issues: [],
-    suggestions: [],
-  };
+  try {
+    const prompt = buildSemanticPrompt(task, changedFiles, results);
+    const raw = await getLLMProvider().complete(prompt, { model: 'haiku' });
+    return parseSemanticResult(raw);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      confidence: 0,
+      completeness: 'LLM call failed',
+      issues: ['LLM error: ' + message],
+      suggestions: [],
+    };
+  }
 }

@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   buildSemanticPrompt,
   parseSemanticResult,
   runL4Semantic,
 } from './l4-semantic.js';
 import type { FileChange, VerificationResult } from './l4-semantic.js';
+import { setLLMProvider } from '../llm/index.js';
+import { StubLLMProvider, ErrorLLMProvider } from '../llm/stub-provider.js';
 
 // ---------------------------------------------------------------------------
 // buildSemanticPrompt
@@ -129,20 +131,28 @@ describe('parseSemanticResult', () => {
 });
 
 // ---------------------------------------------------------------------------
-// runL4Semantic (stub)
+// runL4Semantic
 // ---------------------------------------------------------------------------
 
 describe('runL4Semantic', () => {
+  afterEach(() => setLLMProvider(null));
+
   it('returns default confidence of 70 (stub)', async () => {
+    setLLMProvider(new StubLLMProvider(
+      '{"confidence":85,"completeness":"all done","issues":[],"suggestions":["more tests"]}',
+    ));
     const result = await runL4Semantic('task', [], {
       l0Passed: true,
       l1Passed: true,
       l2Passed: true,
     });
-    expect(result.confidence).toBe(70);
+    expect(result.confidence).toBe(85);
   });
 
   it('returns a SemanticReviewResult shape', async () => {
+    setLLMProvider(new StubLLMProvider(
+      '{"confidence":50,"completeness":"partial","issues":[],"suggestions":[]}',
+    ));
     const result = await runL4Semantic('implement feature', [], {
       l0Passed: false,
       l1Passed: false,
@@ -152,5 +162,16 @@ describe('runL4Semantic', () => {
     expect(typeof result.completeness).toBe('string');
     expect(Array.isArray(result.issues)).toBe(true);
     expect(Array.isArray(result.suggestions)).toBe(true);
+  });
+
+  it('returns fallback on LLM error', async () => {
+    setLLMProvider(new ErrorLLMProvider('simulated failure'));
+    const result = await runL4Semantic('task', [], {
+      l0Passed: true,
+      l1Passed: true,
+      l2Passed: true,
+    });
+    expect(result.confidence).toBe(0);
+    expect(result.issues.some(i => i.includes('LLM error'))).toBe(true);
   });
 });

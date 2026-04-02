@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import yaml from 'js-yaml';
 
@@ -159,16 +160,17 @@ async function runE2ECase(
 ): Promise<L3StepResult[]> {
   const results: L3StepResult[] = [];
 
-  // This path is only reached when Playwright is confirmed available above.
-  // The structure is implemented; actual browser launch would be:
-  //   const { chromium } = await import('playwright');
-  //   const browser = await chromium.launch({ headless: true });
-  //   const page = await browser.newPage();
-  //   try { ... step dispatch ... } finally { await browser.close(); }
-  // Returning step-level results directly since this is a stub execution.
-
-  for (const step of e2eCase.steps) {
-    results.push(await dispatchStep(step, screenshots));
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const pw = await (new Function('m', 'return import(m)')('playwright') as Promise<any>);
+  const { chromium } = pw;
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  try {
+    for (const step of e2eCase.steps) {
+      results.push(await dispatchStep(step, screenshots, page));
+    }
+  } finally {
+    await browser.close();
   }
 
   return results;
@@ -176,29 +178,55 @@ async function runE2ECase(
 
 async function dispatchStep(
   step: E2EStep,
-  _screenshots: string[],
+  screenshots: string[],
+  page: any,
 ): Promise<L3StepResult> {
-  // Step dispatch structure — actual Playwright calls would go here
   switch (step.action) {
     case 'navigate':
-      // page.goto(baseUrl + step.url)
-      return { stepId: step.id, passed: true };
+      try {
+        await page.goto(step.url ?? '');
+        return { stepId: step.id, passed: true };
+      } catch (err: any) {
+        return { stepId: step.id, passed: false, error: err.message };
+      }
 
     case 'click':
-      // page.click(step.selector)
-      return { stepId: step.id, passed: true };
+      try {
+        await page.click(step.selector ?? '');
+        return { stepId: step.id, passed: true };
+      } catch (err: any) {
+        return { stepId: step.id, passed: false, error: err.message };
+      }
 
     case 'upload':
-      // page.setInputFiles(step.selector, step.file)
-      return { stepId: step.id, passed: true };
+      try {
+        if (step.selector && step.file) await page.setInputFiles(step.selector, step.file);
+        return { stepId: step.id, passed: true };
+      } catch (err: any) {
+        return { stepId: step.id, passed: false, error: err.message };
+      }
 
     case 'screenshot':
-      // page.screenshot({ path: screenshotPath })
-      return { stepId: step.id, passed: true };
+      try {
+        const path = join(tmpdir(), `reins-e2e-${step.id}-${Date.now()}.png`);
+        await page.screenshot({ path });
+        screenshots.push(path);
+        return { stepId: step.id, passed: true };
+      } catch (err: any) {
+        return { stepId: step.id, passed: false, error: err.message };
+      }
 
     case 'assert':
-      // page.waitForSelector(step.expect.selector, { visible: step.expect.visible })
-      return { stepId: step.id, passed: true };
+      try {
+        const sel = step.expect?.selector ?? '';
+        await page.waitForSelector(sel, {
+          state: step.expect?.visible ? 'visible' : 'attached',
+          timeout: step.expect?.timeout ?? 5000,
+        });
+        return { stepId: step.id, passed: true };
+      } catch (err: any) {
+        return { stepId: step.id, passed: false, error: err.message };
+      }
 
     default:
       return { stepId: step.id, passed: false, error: `unknown action: ${String((step as E2EStep).action)}` };

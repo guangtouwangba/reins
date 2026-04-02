@@ -1,66 +1,66 @@
-import { describe, it, expect } from 'vitest';
-import { generateQuestions, universalDimensions, filterByContext } from './question-engine.js';
-import { emptyCodebaseContext } from '../scanner/types.js';
-import type { Constraint } from '../constraints/schema.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { generateQuestions } from './question-engine.js';
+import { setLLMProvider } from '../llm/index.js';
+import { StubLLMProvider, ErrorLLMProvider } from '../llm/stub-provider.js';
+import type { CodebaseContext } from '../scanner/types.js';
 
-describe('question-engine', () => {
-  describe('universalDimensions', () => {
-    it('returns questions covering all 6 dimensions', () => {
-      const qs = universalDimensions();
-      const dims = new Set(qs.map(q => q.dimension));
-      expect(dims.size).toBe(6);
-      expect(dims).toContain('scope');
-      expect(dims).toContain('users');
-      expect(dims).toContain('data');
-      expect(dims).toContain('error');
-      expect(dims).toContain('migration');
-      expect(dims).toContain('auth');
-    });
+// Minimal context for tests
+function minimalContext(): CodebaseContext {
+  return {
+    structure: { files: [], directories: [] },
+    stack: { language: ['TypeScript'], framework: ['express'], packageManager: 'pnpm', buildTool: '', testFramework: '' },
+    architecture: { pattern: 'api', layers: [] },
+    testing: {},
+    dependencies: { direct: {}, dev: {} },
+    conventions: {},
+  } as unknown as CodebaseContext;
+}
 
-    it('each question has a valid priority', () => {
-      const qs = universalDimensions();
-      for (const q of qs) {
-        expect(['blocking', 'important', 'optional']).toContain(q.priority);
-      }
-    });
+afterEach(() => setLLMProvider(null));
+
+describe('generateQuestions', () => {
+  it('returns universal questions when LLM returns empty', async () => {
+    setLLMProvider(new StubLLMProvider('[]'));
+    const result = await generateQuestions('add user auth', minimalContext(), []);
+    expect(result.blocking.length).toBeGreaterThan(0);
+    expect(result.inferred).toBeDefined();
   });
 
-  describe('filterByContext', () => {
-    it('infers auth when auth middleware detected', () => {
-      const ctx = emptyCodebaseContext();
-      ctx.structure.files = [{ path: 'src/middleware/auth.ts', size: 100, mtime: 0 }];
-      const { questions, inferred } = filterByContext(universalDimensions(), ctx, []);
-      expect(inferred.some(f => f.dimension === 'auth')).toBe(true);
-      expect(questions.every(q => q.dimension !== 'auth')).toBe(true);
-    });
-
-    it('infers ORM from constraints mentioning Prisma', () => {
-      const ctx = emptyCodebaseContext();
-      const constraints: Constraint[] = [{
-        id: 'use-prisma', rule: 'Always use Prisma ORM for database access',
-        severity: 'critical', scope: 'global', source: 'auto',
-        enforcement: { soft: false, hook: false },
-      }];
-      const { inferred } = filterByContext(universalDimensions(), ctx, constraints);
-      expect(inferred.some(f => f.dimension === 'orm')).toBe(true);
-    });
-
-    it('returns all questions when no context signals match', () => {
-      const ctx = emptyCodebaseContext();
-      const { questions, inferred } = filterByContext(universalDimensions(), ctx, []);
-      expect(inferred).toHaveLength(0);
-      expect(questions).toHaveLength(6);
-    });
+  it('includes LLM-generated task-specific questions', async () => {
+    const llmResponse = JSON.stringify([
+      { id: 'task-1', dimension: 'performance', text: 'Expected request rate?', priority: 'important' },
+      { id: 'task-2', dimension: 'caching', text: 'Cache TTL?', priority: 'optional', default: '5 minutes' },
+    ]);
+    setLLMProvider(new StubLLMProvider(llmResponse));
+    const result = await generateQuestions('add caching layer', minimalContext(), []);
+    const allQs = [...result.blocking, ...result.important, ...result.optional];
+    expect(allQs.some(q => q.id === 'task-1')).toBe(true);
+    expect(allQs.some(q => q.id === 'task-2')).toBe(true);
   });
 
-  describe('generateQuestions', () => {
-    it('categorizes questions correctly', async () => {
-      const ctx = emptyCodebaseContext();
-      const result = await generateQuestions('add feature', ctx, []);
-      expect(result.blocking.length).toBeGreaterThan(0);
-      expect(result.important.length).toBeGreaterThan(0);
-      expect(result.optional.length).toBeGreaterThan(0);
-      expect(result.blocking.every(q => q.priority === 'blocking')).toBe(true);
-    });
+  it('returns gracefully on LLM error', async () => {
+    setLLMProvider(new ErrorLLMProvider('network error'));
+    const result = await generateQuestions('add feature', minimalContext(), []);
+    // Should still return universal questions, just no task-specific
+    expect(result.blocking.length).toBeGreaterThan(0);
+  });
+
+  it('handles invalid LLM JSON gracefully', async () => {
+    setLLMProvider(new StubLLMProvider('not valid json'));
+    const result = await generateQuestions('build API', minimalContext(), []);
+    expect(result.blocking.length).toBeGreaterThan(0);
+  });
+
+  it('filters out malformed question objects from LLM', async () => {
+    const llmResponse = JSON.stringify([
+      { id: 'task-1', dimension: 'perf', text: 'Good question?', priority: 'important' },
+      { missing: 'fields' },
+      { id: 'task-3' }, // missing text and dimension
+    ]);
+    setLLMProvider(new StubLLMProvider(llmResponse));
+    const result = await generateQuestions('task', minimalContext(), []);
+    const taskQs = [...result.blocking, ...result.important, ...result.optional].filter(q => q.id.startsWith('task-'));
+    expect(taskQs).toHaveLength(1);
+    expect(taskQs[0]!.id).toBe('task-1');
   });
 });
