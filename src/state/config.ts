@@ -78,6 +78,45 @@ export interface AdaptersConfig {
   enabled: string[];
 }
 
+/**
+ * `reins ship` tunables. Defaults live in `getDefaultConfig()`; users may
+ * override any subset in `.reins/config.yaml` under the `ship:` key.
+ *
+ * See `openspec/changes/2026-04-07-feature-ship/design.md` §10 for rationale.
+ */
+export interface ShipConfig {
+  /** Per-feature retry budget when ship.feature.max_attempts is unset. */
+  default_max_attempts: number;
+  /** Timeout (ms) for each `claude -p` implement call. */
+  implement_timeout_ms: number;
+  /** Timeout (ms) for the full `pipeline.feature_verify` chain per attempt. */
+  feature_verify_timeout_ms: number;
+  /** `.reins/runs/` cleanup window in days. 0 disables cleanup. */
+  log_retention_days: number;
+  /**
+   * When true, any out-of-scope touched file aborts the attempt. When false
+   * (default), serial mode warns and parallel mode still blocks (drift in
+   * parallel pollutes other worktrees' rebase).
+   */
+  abort_on_scope_drift: boolean;
+  /** Hard ceiling on concurrent features in any parallel step. */
+  max_parallelism: number;
+  /** When false, ship skips the AI planner and falls back to depends_on order. */
+  planner_enabled: boolean;
+  /** When true, ship commits after each feature's feature_verify passes. */
+  auto_commit: boolean;
+  /**
+   * Commit message style:
+   * - `auto`: detect from `git log --oneline -20` (≥80% conventional → use it)
+   * - `conventional`: `feat: <title>` + reins footer
+   * - `free`: `<title>` + reins footer
+   * - `custom`: use `commit_custom_template` with {title}/{id}/{run_id}/{attempts} placeholders
+   */
+  commit_style: 'auto' | 'conventional' | 'free' | 'custom';
+  /** Template used when `commit_style === 'custom'`. */
+  commit_custom_template?: string;
+}
+
 export interface ReinsConfig {
   scan: ScanConfig;
   learn: LearnConfig;
@@ -87,6 +126,7 @@ export interface ReinsConfig {
   knowledge: KnowledgeConfig;
   skills: SkillsConfig;
   adapters: AdaptersConfig;
+  ship?: ShipConfig;
   gate?: {
     stop_skip_test?: boolean;
     stop_skip_lint?: boolean;
@@ -164,6 +204,17 @@ export function getDefaultConfig(): ReinsConfig {
     },
     adapters: {
       enabled: [],
+    },
+    ship: {
+      default_max_attempts: 3,
+      implement_timeout_ms: 600_000,
+      feature_verify_timeout_ms: 600_000,
+      log_retention_days: 30,
+      abort_on_scope_drift: false,
+      max_parallelism: 3,
+      planner_enabled: true,
+      auto_commit: true,
+      commit_style: 'auto',
     },
   };
 }

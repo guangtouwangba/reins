@@ -53,6 +53,37 @@ describe('initCommand', () => {
     expect(lineCount).toBeLessThan(50);
   });
 
+  it('ships the full set of reins slash commands into .claude/commands/reins/', async () => {
+    await initCommand(tmpDir, { depth: 'L0-L2' });
+
+    const commandsDir = join(tmpDir, '.claude', 'commands', 'reins');
+    expect(existsSync(commandsDir)).toBe(true);
+
+    // Each workflow registered in getWorkflows() should land as one
+    // .md file under .claude/commands/reins/. Matching against the
+    // live registry (rather than a hard-coded count) keeps this test
+    // in sync whenever workflows are added.
+    const { getWorkflows } = await import('../workflows/index.js');
+    const workflows = getWorkflows();
+
+    for (const workflow of workflows) {
+      const commandPath = join(commandsDir, `${workflow.id}.md`);
+      expect(existsSync(commandPath), `missing slash command: ${workflow.id}`).toBe(true);
+      const content = readFileSync(commandPath, 'utf-8');
+      expect(content).toContain(`name: ${workflow.name}`);
+      expect(content).toContain(workflow.body.split('\n')[0]);
+    }
+
+    // Phase 2B adds feature-new + ship-here for a total of 7.
+    expect(workflows.length).toBe(7);
+  });
+
+  it('creates an empty .reins/features/ directory for the ship queue', async () => {
+    await initCommand(tmpDir, { depth: 'L0-L2' });
+    const featuresDir = join(tmpDir, '.reins', 'features');
+    expect(existsSync(featuresDir)).toBe(true);
+  });
+
   it('dry-run creates zero files (.reins/ and adapter outputs)', async () => {
     await initCommand(tmpDir, { depth: 'L0-L2', dryRun: true });
 

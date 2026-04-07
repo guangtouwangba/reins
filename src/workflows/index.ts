@@ -4,6 +4,8 @@ import { addConstraintWorkflow } from './add-constraint.js';
 import { verifyWorkflow } from './verify.js';
 import { learnWorkflow } from './learn.js';
 import { updateWorkflow } from './update.js';
+import { featureNewWorkflow } from './feature-new.js';
+import { shipHereWorkflow } from './ship-here.js';
 
 export type { Workflow } from './types.js';
 
@@ -21,6 +23,8 @@ export function getWorkflows(): Workflow[] {
     verifyWorkflow,
     learnWorkflow,
     updateWorkflow,
+    featureNewWorkflow,
+    shipHereWorkflow,
   ];
 }
 

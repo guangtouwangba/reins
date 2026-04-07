@@ -257,6 +257,10 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   generateSettingsJson(projectRoot, hookConfigs);
   console.log(`  ✓ ${hookConfigs.length} hooks generated`);
 
+  // 8b. Create empty feature queue directory so `reins ship` and
+  // `/reins-feature-new` have a stable place to drop feature files.
+  mkdirSync(join(projectRoot, '.reins', 'features'), { recursive: true });
+
   // Skill indexing
   if (!options.dryRun && config.skills?.enabled) {
     const { buildSkillIndex, saveSkillIndex } = await import('../scanner/skill-indexer.js');
@@ -270,6 +274,7 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   // Print summary
   console.log('  Generated files:');
   console.log('  ✓ .reins/constraints.yaml');
+  console.log('  ✓ .reins/features/ (empty — add features with `reins feature new <id>`)');
   console.log('  ✓ .claude/settings.json');
   for (const result of adapterResults) {
     if (result.written) {

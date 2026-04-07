@@ -6,7 +6,11 @@ const program = new Command();
 program
   .name('reins')
   .description('AI coding agent constraint governance tool')
-  .version('0.1.0');
+  .version('0.1.0')
+  // Positional options are required so subcommands like `feature` can
+  // use `.passThroughOptions()` — without this commander would eat flags
+  // like `--title` before the subcommand's own parser sees them.
+  .enablePositionalOptions();
 
 program
   .command('init')
@@ -84,6 +88,34 @@ program
   .action(async (action, args) => {
     const { runHook } = await import('./commands/hook-cmd.js');
     await runHook(action, args);
+  });
+
+program
+  .command('feature')
+  .description('Manage the feature queue consumed by `reins ship`')
+  .argument('[action]', 'Action: list, show, new, status, set-status, next')
+  .argument('[args...]', 'Action arguments')
+  // passThroughOptions: stop commander from interpreting flags like
+  // `--title` or `--json` as feature-command options. feature-cmd.ts
+  // parses them from the positional args itself.
+  .passThroughOptions()
+  .allowUnknownOption()
+  .action(async (action, args) => {
+    const { runFeature } = await import('./commands/feature-cmd.js');
+    await runFeature(action, args);
+  });
+
+program
+  .command('ship')
+  .description('Batch-execute the todo features in .reins/features/ end to end')
+  .option('--only <ids>', 'Comma-separated feature ids to run (default: all todo features)')
+  .option('--dry-run', 'Plan the run without spawning claude or running verify')
+  .option('--max-attempts <n>', 'Per-feature retry budget override', (v) => parseInt(v, 10))
+  .option('--parallel <n>', 'Max concurrent features (1 = strict serial, disables planner)', (v) => parseInt(v, 10))
+  .option('--no-commit', 'Skip auto-commit after feature_verify passes')
+  .action(async (opts) => {
+    const { runShipCommand } = await import('./commands/ship-cmd.js');
+    await runShipCommand(opts);
   });
 
 program
