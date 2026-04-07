@@ -256,7 +256,6 @@ export function writeConstraintsFile(
   mkdirSync(reinsDir, { recursive: true });
 
   const packageManager = context.stack.packageManager || 'npm';
-  const pmRun = packageManager === 'npm' ? 'npm run' : packageManager === 'yarn' ? 'yarn' : `${packageManager} run`;
 
   const config: ConstraintsConfig = {
     version: 1,
@@ -273,41 +272,11 @@ export function writeConstraintsFile(
     },
     constraints,
     pipeline: {
-      planning: 'ultrathink',
-      execution: 'default',
-      verification: { engine: 'reins', max_iterations: 3 },
-      qa: true,
-      pre_commit: [
-        ...(context.commands?.lint ? [context.commands.lint.command] : [`${pmRun} lint`]),
-        ...(context.commands?.typecheck ? [context.commands.typecheck.command] : [`${pmRun} typecheck`]),
-      ].filter(Boolean),
-      post_develop: [
-        ...(context.commands?.test ? [context.commands.test.command] : [`${pmRun} test`]),
-      ].filter(Boolean),
-    },
-    profiles: {
-      strict: {
-        constraints: ['critical', 'important', 'helpful'],
-        hooks: ['critical', 'important'],
-        pipeline: ['planning', 'execution', 'verification', 'qa'],
-        output_format: 'detailed',
-      },
-      default: {
-        constraints: ['critical', 'important'],
-        hooks: ['critical'],
-        pipeline: ['execution', 'verification'],
-      },
-      relaxed: {
-        constraints: ['critical'],
-        hooks: [],
-        pipeline: ['execution'],
-      },
-      ci: {
-        constraints: ['critical', 'important', 'helpful'],
-        hooks: ['critical', 'important'],
-        pipeline: ['execution', 'verification', 'qa'],
-        output_format: 'json',
-      },
+      // Left empty at init time. The user populates this via the
+      // /reins-setup slash command, which inspects the real project layout
+      // (monorepo subpaths, package manager, lint commands) and writes the
+      // verbatim shell commands here.
+      pre_commit: [],
     },
   };
 

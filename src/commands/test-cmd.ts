@@ -25,13 +25,27 @@ function runHookSynthetic(hookPath: string): 'ok' | 'error' {
   const result = spawnSync(hookPath, [], {
     input: JSON.stringify({ event: 'test', files: [] }),
     encoding: 'utf-8',
-    timeout: 5000,
-    env: { ...process.env, CLAUDE_HOOK_DATA: JSON.stringify({ event: 'test', files: [] }) },
+    timeout: 30_000,
+    env: {
+      ...process.env,
+      CLAUDE_HOOK_DATA: JSON.stringify({ event: 'test', files: [] }),
+      // Signal to gate implementations that this is a synthetic health-check,
+      // not a real tool event. Gates that run expensive work (lint, typecheck,
+      // git diff capture) should short-circuit on this flag.
+      REINS_GATE_SYNTHETIC: '1',
+    },
   });
 
+  // Spawn failure (ENOENT, permission denied, timeout, etc.) = truly broken.
   if (result.error) return 'error';
-  // For synthetic healthy test, exit 0 means ok
-  return result.status === 0 ? 'ok' : 'error';
+
+  // Reins gate exit code protocol:
+  //   0 = allow   → hook ran cleanly
+  //   2 = block   → hook ran cleanly and made a policy decision
+  // Any other code (1, 127, 139, ...) means the script itself crashed.
+  // Both 0 and 2 mean "the hook is healthy as a script".
+  if (result.status === 0 || result.status === 2) return 'ok';
+  return 'error';
 }
 
 export async function runTest(): Promise<void> {

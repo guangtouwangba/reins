@@ -1,6 +1,9 @@
 import { execSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import yaml from 'js-yaml';
 import type { GateInput, GateResult } from './types.js';
-import { loadConstraints } from './shared.js';
+import type { ConstraintsConfig } from '../constraints/schema.js';
 import { loadConfig } from '../state/config.js';
 import { generateId, generateFilename, saveEntry } from '../knowledge/store.js';
 import type { KnowledgeEntry } from '../knowledge/types.js';
@@ -12,50 +15,78 @@ interface CapturedKnowledge {
   confidence: number;
 }
 
+/**
+ * Load `pipeline.pre_commit` commands from constraints.yaml. Returns an empty
+ * array when the file is absent, unreadable, or has no pre_commit entries.
+ *
+ * These commands are written by the AI during `/reins-setup` (see
+ * `.reins/SETUP.prompt.md`). The gate is intentionally dumb: it does not
+ * guess what to run based on package.json, monorepo layout, or stack
+ * detection. If you want verification at Stop, configure it in
+ * constraints.yaml.
+ */
+function loadPreCommitCommands(projectRoot: string): string[] {
+  const path = join(projectRoot, '.reins', 'constraints.yaml');
+  if (!existsSync(path)) return [];
+  try {
+    const raw = readFileSync(path, 'utf-8');
+    const parsed = yaml.load(raw) as ConstraintsConfig | null;
+    return parsed?.pipeline?.pre_commit ?? [];
+  } catch {
+    return [];
+  }
+}
+
+interface CommandFailure {
+  cmd: string;
+  output: string;
+}
+
+function runShellCommand(cmd: string, cwd: string): { ok: true } | { ok: false; output: string } {
+  try {
+    execSync(cmd, { cwd, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe', shell: '/bin/sh' });
+    return { ok: true };
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException & { stdout?: unknown; stderr?: unknown };
+    const stdout = typeof e.stdout === 'string' ? e.stdout : '';
+    const stderr = typeof e.stderr === 'string' ? e.stderr : '';
+    const combined = `${stdout}\n${stderr}`.trim() || (e.message ?? 'unknown error');
+    return { ok: false, output: combined.slice(0, 800) };
+  }
+}
+
 export async function gateStop(projectRoot: string, _input: GateInput): Promise<GateResult> {
   const result: GateResult = { action: 'allow', messages: [] };
+
+  // Synthetic health-check from `reins test`: just prove the script runs.
+  // Don't kick off any project commands or git-diff capture.
+  if (process.env.REINS_GATE_SYNTHETIC === '1') {
+    return result;
+  }
+
   const config = loadConfig(projectRoot);
   const gateConfig = config.gate ?? {};
 
-  // 1. L0 Static checks (lint + typecheck, skip test by default)
-  const constraints = loadConstraints(projectRoot);
+  // 1. L0 verification — run whatever pipeline.pre_commit specifies, verbatim.
+  //
+  // If the user (or `/reins-setup`) hasn't populated pre_commit yet, we run
+  // nothing. That's deliberate: we'd rather let agents keep working than
+  // false-block on heuristic guesses about lint/typecheck commands.
+  if (!gateConfig.stop_skip_lint) {
+    const commands = loadPreCommitCommands(projectRoot);
+    const failures: CommandFailure[] = [];
 
-  // Only run L0 checks if constraints exist (project is initialized)
-  if (constraints.length > 0) {
-    const l0Failures: string[] = [];
-
-    // Try lint (skip if configured)
-    if (!gateConfig.stop_skip_lint) {
-      try {
-        execSync('npm run lint 2>&1 || pnpm lint 2>&1 || yarn lint 2>&1', {
-          cwd: projectRoot, encoding: 'utf-8', timeout: 30000, stdio: 'pipe',
-        });
-      } catch (err) {
-        const output = err instanceof Error && 'stdout' in err ? String((err as NodeJS.ErrnoException & { stdout: unknown }).stdout) : '';
-        // Only count as failure if lint script exists (not "missing script" error)
-        if (!output.includes('Missing script') && !output.includes('not found')) {
-          l0Failures.push(`lint: ${output.slice(0, 200)}`);
-        }
-      }
+    for (const cmd of commands) {
+      const res = runShellCommand(cmd, projectRoot);
+      if (!res.ok) failures.push({ cmd, output: res.output });
     }
 
-    // Try typecheck
-    try {
-      execSync('npm run typecheck 2>&1 || pnpm typecheck 2>&1 || yarn typecheck 2>&1', {
-        cwd: projectRoot, encoding: 'utf-8', timeout: 30000, stdio: 'pipe',
-      });
-    } catch (err) {
-      const output = err instanceof Error && 'stdout' in err ? String((err as NodeJS.ErrnoException & { stdout: unknown }).stdout) : '';
-      if (!output.includes('Missing script') && !output.includes('not found')) {
-        l0Failures.push(`typecheck: ${output.slice(0, 200)}`);
-      }
-    }
-
-    if (l0Failures.length > 0) {
+    if (failures.length > 0) {
+      const lines = failures.map(f => `  $ ${f.cmd}\n${indent(f.output, '    ')}`);
       return {
         action: 'block',
         messages: [],
-        blockReason: `reins [block] L0 verification failed:\n${l0Failures.map(f => `  - ${f}`).join('\n')}`,
+        blockReason: `reins [block] L0 verification failed:\n${lines.join('\n\n')}`,
       };
     }
   }
@@ -71,6 +102,10 @@ export async function gateStop(projectRoot: string, _input: GateInput): Promise<
   }
 
   return result;
+}
+
+function indent(text: string, prefix: string): string {
+  return text.split('\n').map(line => prefix + line).join('\n');
 }
 
 function captureKnowledgeFromDiff(projectRoot: string): CapturedKnowledge[] {

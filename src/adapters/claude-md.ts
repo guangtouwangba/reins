@@ -5,6 +5,7 @@ import type { CodebaseContext } from '../scanner/types.js';
 import type { Adapter } from './base-adapter.js';
 import { registerAdapter } from './base-adapter.js';
 import type { AdapterDefinition, AdapterInput, AdapterOutput } from './base-adapter.js';
+import { getWorkflows, renderClaudeCommand } from '../workflows/index.js';
 
 function inferCommands(context: CodebaseContext): string[] {
   const pm = context.stack.packageManager || 'npm';
@@ -155,6 +156,18 @@ export const ClaudeCodeAdapter: AdapterDefinition = {
     }
 
     outputs.push({ path: 'AGENTS.md', content: agentsLines.join('\n') + '\n', label: 'Agent context (per-directory)' });
+
+    // Slash commands — one .md per workflow under .claude/commands/reins/.
+    // The IDE auto-discovers them and surfaces them as /<id> in the
+    // command palette. The CLI never runs the body itself; the IDE-LLM
+    // does, with full project context.
+    for (const workflow of getWorkflows()) {
+      outputs.push({
+        path: `.claude/commands/reins/${workflow.id}.md`,
+        content: renderClaudeCommand(workflow),
+        label: `Slash command: /${workflow.id}`,
+      });
+    }
 
     return outputs;
   },

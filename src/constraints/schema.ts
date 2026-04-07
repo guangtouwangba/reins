@@ -24,19 +24,12 @@ export interface Constraint {
 }
 
 export interface PipelineConfig {
-  planning: string;
-  execution: string;
-  verification: { engine: string; max_iterations: number };
-  qa: boolean;
+  /**
+   * Shell commands the gate-stop hook runs verbatim with cwd = repo root.
+   * If any command exits non-zero, the Stop hook blocks the turn.
+   * Populated by the user via the /reins-setup slash command after init.
+   */
   pre_commit: string[];
-  post_develop: string[];
-}
-
-export interface ProfileConfig {
-  constraints: 'all' | Severity[];
-  hooks: 'all' | Severity[];
-  pipeline: string[];
-  output_format?: string;
 }
 
 export interface ConstraintsConfig {
@@ -51,5 +44,4 @@ export interface ConstraintsConfig {
   };
   constraints: Constraint[];
   pipeline: PipelineConfig;
-  profiles: Record<string, ProfileConfig>;
 }

@@ -29,15 +29,7 @@ function makeConfig(name = 'test-project'): ConstraintsConfig {
     project: { name, type: 'application' },
     stack: { primary_language: 'typescript', framework: 'none', test_framework: 'vitest', package_manager: 'pnpm' },
     constraints: [],
-    pipeline: {
-      planning: 'ultrathink',
-      execution: 'default',
-      verification: { engine: 'reins', max_iterations: 3 },
-      qa: true,
-      pre_commit: [],
-      post_develop: [],
-    },
-    profiles: {},
+    pipeline: { pre_commit: [] },
   };
 }
 

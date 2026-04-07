@@ -7,12 +7,6 @@ export interface ScanConfig {
   exclude_dirs: string[];
 }
 
-export interface DevelopConfig {
-  default_model: string;
-  skip_stages: string[];
-  constraint_profile: string;
-}
-
 export interface LearnConfig {
   auto_extract_threshold: number;
   suggestion_threshold: number;
@@ -35,19 +29,6 @@ export interface HooksConfig {
 export interface StatusConfig {
   default_format: string;
   history_days: number;
-}
-
-export interface EvaluationProfileConfig {
-  exit_when: string;
-  max_iterations: number;
-}
-
-export interface EvaluationConfig {
-  profiles: Record<string, EvaluationProfileConfig>;
-  auto_detect_type: boolean;
-  l2_timeout: number;
-  l3_timeout: number;
-  l4_model: string;
 }
 
 export interface KnowledgeConfig {
@@ -99,12 +80,10 @@ export interface AdaptersConfig {
 
 export interface ReinsConfig {
   scan: ScanConfig;
-  develop: DevelopConfig;
   learn: LearnConfig;
   update: UpdateConfig;
   hooks: HooksConfig;
   status: StatusConfig;
-  evaluation: EvaluationConfig;
   knowledge: KnowledgeConfig;
   skills: SkillsConfig;
   adapters: AdaptersConfig;
@@ -121,11 +100,6 @@ export function getDefaultConfig(): ReinsConfig {
     scan: {
       depth: 'L0-L2',
       exclude_dirs: ['vendor/', 'generated/'],
-    },
-    develop: {
-      default_model: 'sonnet',
-      skip_stages: [],
-      constraint_profile: 'default',
     },
     learn: {
       auto_extract_threshold: 85,
@@ -146,18 +120,6 @@ export function getDefaultConfig(): ReinsConfig {
     status: {
       default_format: 'human',
       history_days: 30,
-    },
-    evaluation: {
-      profiles: {
-        relaxed: { exit_when: 'L0_passed', max_iterations: 20 },
-        default: { exit_when: 'L0_passed AND L1_passed', max_iterations: 50 },
-        strict: { exit_when: 'L0_passed AND L1_passed AND L2_passed AND L4_confidence >= 80', max_iterations: 100 },
-        fullstack: { exit_when: 'L0_passed AND L1_passed AND L2_passed AND L3_passed AND L4_confidence >= 80', max_iterations: 100 },
-      },
-      auto_detect_type: true,
-      l2_timeout: 300,
-      l3_timeout: 600,
-      l4_model: 'sonnet',
     },
     knowledge: {
       capture: {

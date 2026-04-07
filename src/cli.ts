@@ -21,52 +21,6 @@ program
   });
 
 program
-  .command('develop <task>')
-  .description('Auto-develop under constraints (spec generation available)')
-  .option('-p, --profile <profile>', 'Constraint profile', 'default')
-  .option('--skip <stages>', 'Skip pipeline stages (comma-separated: spec,design,qa,planning)')
-  .option('--spec <path>', 'Load existing spec from path')
-  .option('--no-input', 'Non-interactive mode (skip all prompts)')
-  .option('--dry-run', 'Generate plan only, no code changes')
-  .option('--skills <ids>', 'Explicitly load specific skills (comma-separated)')
-  .action(async (task, options) => {
-    const { runPipeline } = await import('./pipeline/runner.js');
-    const skipStages: string[] = [];
-    if (options.skip) {
-      const parts = (options.skip as string).split(',').map((s: string) => s.trim());
-      for (const part of parts) {
-        if (part === 'spec') skipStages.push('requirementRefine');
-        else if (part === 'design') skipStages.push('designGenerate');
-        else if (part === 'planning') { skipStages.push('requirementRefine'); skipStages.push('designGenerate'); }
-        else if (part === 'qa') skipStages.push('qa');
-        else skipStages.push(part);
-      }
-    }
-    const result = await runPipeline(task, process.cwd(), {
-      profile: options.profile ?? 'default',
-      skipStages,
-      specPath: options.spec,
-      noInput: options.noInput ?? !process.stdin.isTTY,
-      skillIds: options.skills ? (options.skills as string).split(',').map((s: string) => s.trim()) : undefined,
-      onStageChange: (stage, status) => {
-        if (status === 'start') console.log(`  [${stage}] starting...`);
-        else if (status === 'complete') console.log(`  [${stage}] ✓`);
-        else if (status === 'skip') console.log(`  [${stage}] skipped`);
-        else if (status === 'fail') console.log(`  [${stage}] ✗`);
-      },
-    });
-    if (result.success) {
-      console.log('');
-      console.log('Pipeline completed successfully.');
-    } else {
-      console.log('');
-      console.log(`Pipeline failed at stage: ${result.failedStage}`);
-      if (result.error) console.log(`Error: ${result.error}`);
-      process.exitCode = 1;
-    }
-  });
-
-program
   .command('status')
   .description('View constraint status and statistics')
   .option('-f, --filter <severity>', 'Filter by severity')
@@ -104,31 +58,17 @@ program
   });
 
 program
-  .command('learn')
-  .description('Save learned knowledge from current session')
-  .option('--auto', 'Run full OBSERVE → ANALYZE → LEARN pipeline non-interactively')
-  .action(async (options) => {
-    if (options.auto) {
-      const { analyzeExecutions } = await import('./learn/analyzer.js');
-      const { executeActions } = await import('./learn/learner.js');
-      const projectRoot = process.cwd();
-      const result = await analyzeExecutions(projectRoot);
-      const executed = await executeActions(projectRoot, result.suggestedActions);
-      const auto = executed.filter(e => e.disposition === 'auto_applied').length;
-      const suggested = executed.filter(e => e.disposition === 'suggested').length;
-      console.log(`reins learn --auto: ${auto} auto-applied, ${suggested} suggested`);
-    } else {
-      console.log('reins learn — run with --auto to trigger full pipeline');
-    }
-  });
-
-program
   .command('analyze')
   .description('Analyze execution history and surface improvement suggestions')
-  .action(async () => {
+  .option('--json', 'Emit the full analysis as JSON (used by /reins-learn)')
+  .action(async (options) => {
     const { analyzeExecutions } = await import('./learn/analyzer.js');
     const projectRoot = process.cwd();
     const result = await analyzeExecutions(projectRoot);
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
     console.log(`Analysis complete:`);
     console.log(`  Success rate: ${result.metrics.successRate.toFixed(1)}%`);
     console.log(`  Avg duration: ${Math.round(result.metrics.avgDuration)}ms`);

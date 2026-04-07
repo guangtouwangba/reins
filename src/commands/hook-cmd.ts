@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import yaml from 'js-yaml';
 import { saveSnapshot } from '../state/snapshot.js';
 import type { ConstraintsConfig } from '../constraints/schema.js';
-import { getLLMProvider } from '../llm/index.js';
 
 function loadConstraintsConfig(projectRoot: string): ConstraintsConfig | null {
   const path = join(projectRoot, '.reins', 'constraints.yaml');
@@ -102,83 +101,6 @@ export async function runHookDisable(projectRoot: string, id: string): Promise<v
   console.log(`Hook disabled for constraint: ${id}`);
 }
 
-export async function runHookAdd(projectRoot: string, description: string): Promise<void> {
-  // Generate a new constraint + hook from description
-  // LLM call is a stub — we create a placeholder constraint and hook file
-  const config = loadConstraintsConfig(projectRoot);
-  if (!config) {
-    console.log('No constraints configured yet. Run reins init first.');
-    return;
-  }
-
-  const slug = description
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .slice(0, 40);
-
-  const id = `custom-${slug}`;
-
-  // Check for duplicate
-  if (config.constraints.find(c => c.id === id)) {
-    console.log(`Constraint ${id} already exists.`);
-    return;
-  }
-
-  // Generate hook_check via LLM
-  let hookCheck = `# Hook for: ${description}`;
-  try {
-    const prompt = `You are generating a shell check snippet for a Claude Code hook constraint.
-
-The constraint description is: "${description}"
-
-Generate a short shell script snippet (1-5 lines) that checks if a tool input violates this constraint.
-The snippet receives the tool input via stdin as JSON. It should:
-- Exit 0 if the input is acceptable
-- Exit 2 with an error message to stderr if the input violates the constraint
-
-Example for "no raw SQL queries":
-\`\`\`
-INPUT=$(cat)
-if echo "$INPUT" | grep -qiE '(SELECT|INSERT|UPDATE|DELETE|DROP)\\s'; then
-  echo "Constraint violation: Use ORM instead of raw SQL" >&2
-  exit 2
-fi
-exit 0
-\`\`\`
-
-Respond with ONLY the shell script snippet, no markdown fences, no explanation.`;
-    hookCheck = await getLLMProvider().complete(prompt, { model: 'haiku' });
-  } catch {
-    // Fall back to placeholder on LLM failure
-  }
-
-  const newConstraint = {
-    id,
-    rule: description,
-    severity: 'important' as const,
-    scope: 'global' as const,
-    source: 'manual' as const,
-    enforcement: {
-      soft: false,
-      hook: true,
-      hook_type: 'pre_bash' as const,
-      hook_mode: 'warn' as const,
-      hook_check: hookCheck,
-    },
-    status: 'draft' as const,
-  };
-
-  config.constraints.push(newConstraint);
-
-  saveSnapshot(projectRoot, 'hook-add');
-  saveConstraintsConfig(projectRoot, config);
-
-  console.log(`Added constraint and hook placeholder: ${id}`);
-  console.log(`Edit .reins/hooks/${id}.sh to implement the hook logic.`);
-}
-
 export async function runHook(action: string | undefined, args: string[]): Promise<void> {
   const projectRoot = process.cwd();
 
@@ -195,30 +117,26 @@ export async function runHook(action: string | undefined, args: string[]): Promi
       await runHookDisable(projectRoot, id);
       break;
     }
-    case 'add': {
-      const description = args.join(' ');
-      if (!description) {
-        console.log('Usage: reins hook add <description>');
-        return;
-      }
-      await runHookAdd(projectRoot, description);
-      break;
-    }
-    case 'fix':
-    case 'promote':
-      console.log(`The '${action}' action is not yet available.`);
+    case 'add':
+      // Adding a constraint requires LLM judgment (rule validation, scope
+      // inference, severity calibration, grounding evidence). The CLI no
+      // longer ships an LLM — that work belongs in the user's IDE, where
+      // there is full project context. Point them at the slash command.
+      console.log('`reins hook add` has been replaced by the /reins-add-constraint slash');
+      console.log('command. Open Claude Code or Cursor in this repo and run:');
       console.log('');
-      console.log('Available actions:');
-      console.log('  reins hook list              — list all hooks');
-      console.log('  reins hook add <description> — add a new hook');
-      console.log('  reins hook disable <id>      — disable a hook');
+      console.log('  /reins-add-constraint');
+      console.log('');
+      console.log('The slash command validates the rule against project context, picks a');
+      console.log('scope and severity, and writes constraints.yaml safely.');
       break;
     default:
       if (action) {
         console.log(`Unknown action: ${action}`);
         console.log('');
       }
-      console.log('Usage: reins hook <list|add|disable> [args...]');
+      console.log('Usage: reins hook <list|disable> [args...]');
+      console.log('       (To add a constraint, use /reins-add-constraint in your IDE.)');
       break;
   }
 }

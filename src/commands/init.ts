@@ -2,7 +2,7 @@ import { loadConfig } from '../state/config.js';
 import { scan } from '../scanner/scan.js';
 import { generateConstraints, writeConstraintsFile } from '../constraints/generator.js';
 import { generateContext } from '../context/index.js';
-import { runAdapters, DEFAULT_ADAPTERS, ADAPTER_REGISTRY, runAdaptersV2 } from '../adapters/index.js';
+import { DEFAULT_ADAPTERS, ADAPTER_REGISTRY, runAdaptersV2 } from '../adapters/index.js';
 import { generateHooks } from '../hooks/generator.js';
 import { generateSettingsJson } from '../hooks/settings-writer.js';
 import type { ConstraintsConfig } from '../constraints/schema.js';
@@ -171,8 +171,6 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
 
   // 4. Build ConstraintsConfig (mirrors writeConstraintsFile logic)
   const packageManager = context.stack.packageManager || 'npm';
-  const pmRun =
-    packageManager === 'npm' ? 'npm run' : packageManager === 'yarn' ? 'yarn' : `${packageManager} run`;
 
   const constraintsConfig: ConstraintsConfig = {
     version: 1,
@@ -189,36 +187,8 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
     },
     constraints,
     pipeline: {
-      planning: 'ultrathink',
-      execution: 'default',
-      verification: { engine: 'reins', max_iterations: 3 },
-      qa: true,
-      pre_commit: [`${pmRun} lint`, `${pmRun} typecheck`],
-      post_develop: [`${pmRun} test`],
-    },
-    profiles: {
-      strict: {
-        constraints: ['critical', 'important', 'helpful'],
-        hooks: ['critical', 'important'],
-        pipeline: ['planning', 'execution', 'verification', 'qa'],
-        output_format: 'detailed',
-      },
-      default: {
-        constraints: ['critical', 'important'],
-        hooks: ['critical'],
-        pipeline: ['execution', 'verification'],
-      },
-      relaxed: {
-        constraints: ['critical'],
-        hooks: [],
-        pipeline: ['execution'],
-      },
-      ci: {
-        constraints: ['critical', 'important', 'helpful'],
-        hooks: ['critical', 'important'],
-        pipeline: ['execution', 'verification', 'qa'],
-        output_format: 'json',
-      },
+      // Left empty at init time. Filled by /reins-setup slash command.
+      pre_commit: [],
     },
   };
 
@@ -241,12 +211,17 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   console.log('');
 
   if (options.dryRun) {
+    const { getWorkflows } = await import('../workflows/index.js');
     console.log('  Dry run — no files written.');
     console.log('');
     console.log('  Would generate:');
     console.log('  ✓ .reins/constraints.yaml');
+    console.log('  ✓ .claude/settings.json (hook registration)');
     for (const adapter of DEFAULT_ADAPTERS) {
       console.log(`  ✓ ${adapter.outputPath}`);
+    }
+    for (const workflow of getWorkflows()) {
+      console.log(`  ✓ .claude/commands/reins/${workflow.id}.md`);
     }
     console.log('');
     return;
@@ -304,8 +279,24 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   console.log('');
   console.log('  Reins initialized successfully.');
   console.log('');
-  console.log('  Next steps:');
+  console.log('  Next: open your AI coding tool (Claude Code, Cursor, …) in');
+  console.log('  this repo and run the slash command:');
+  console.log('');
+  console.log('    /reins-setup');
+  console.log('');
+  console.log('  It will read the project, fill in pipeline.pre_commit, and');
+  console.log('  add 5-8 project-specific constraints. The CLI does not call');
+  console.log('  any LLM — your IDE does the work, with full project context.');
+  console.log('');
+  console.log('  Other slash commands now available in your IDE:');
+  console.log('    /reins-add-constraint  — add a new rule by description');
+  console.log('    /reins-verify          — run pre_commit checks on demand');
+  console.log('    /reins-learn           — propose changes from violation history');
+  console.log('    /reins-update          — refresh after project structure changes');
+  console.log('');
+  console.log('  CLI commands:');
   console.log('    reins status   — view constraint summary');
   console.log('    reins test     — verify hooks are healthy');
-  console.log('    reins update   — update after project changes');
+  console.log('    reins update   — rescan and merge after project changes');
+  console.log('');
 }
