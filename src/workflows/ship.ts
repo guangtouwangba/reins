@@ -3,7 +3,7 @@ import type { Workflow } from './types.js';
 export const shipWorkflow: Workflow = {
   id: 'ship',
   name: 'ship',
-  description: 'Batch-run `reins ship` over the todo features in .reins/features/ and report results. Delegates to the CLI — never spawns parallel agents here.',
+  description: 'Run `reins ship` over the feature queue and report results. Delegates to the CLI — never spawns parallel agents.',
   body: `Kick off the \`reins ship\` batch runner and report back what it did.
 This workflow is a thin shell over the CLI — \`reins ship\` is already
 the orchestrator, with its own attempt budget, dependency planner,
