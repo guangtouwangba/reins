@@ -1,8 +1,8 @@
 import type { Workflow } from './types.js';
 
 export const learnWorkflow: Workflow = {
-  id: 'reins-learn',
-  name: 'reins-learn',
+  id: 'learn',
+  name: 'learn',
   description: 'Read execution history, surface recurring violations, and propose constraint changes.',
   body: `Look at what Reins has observed in this project and propose changes to
 \`.reins/constraints.yaml\` based on real history. The CLI does the
@@ -39,7 +39,7 @@ Parse the JSON. The shape is:
 \`\`\`
 
 If \`suggestedActions\` is empty, tell the user "No changes suggested
-yet — keep coding and run \`/reins-learn\` again later." and stop.
+yet — keep coding and run \`/reins:learn\` again later." and stop.
 
 ---
 
@@ -63,7 +63,7 @@ user to choose (apply / modify / skip).
 
 For each action the user accepts:
 
-- \`add_constraint\` → invoke the same logic as \`/reins-add-constraint\`:
+- \`add_constraint\` → invoke the same logic as \`/reins:add-constraint\`:
   validate the rule, derive id/scope/severity, and append to
   \`.reins/constraints.yaml\`. Cite the specific recurring error or
   ignored-constraint frequency that justifies it inside the \`rule\` text.
@@ -72,7 +72,7 @@ For each action the user accepts:
 - \`add_hook\` → set \`enforcement.hook: true\` on the constraint with the
   given id, leaving \`hook_mode\` at the project default.
 - \`create_skill\` → out of scope for this workflow. Tell the user "skill
-  creation lives in \`/reins-skill-create\`" (if you have it) or just
+  creation lives in \`/reins:skill-create\`" (if you have it) or just
   describe the suggested skill content for them to act on later.
 
 Edit the YAML in place — preserve indentation, comments, and unrelated

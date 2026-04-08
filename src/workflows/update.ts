@@ -1,8 +1,8 @@
 import type { Workflow } from './types.js';
 
 export const updateWorkflow: Workflow = {
-  id: 'reins-update',
-  name: 'reins-update',
+  id: 'update',
+  name: 'update',
   description: 'Refresh constraints after major project changes — rescan, merge, surface stale entries.',
   body: `Reins's constraints get stale as the project evolves: directories get
 renamed, package managers swap, modules move. This workflow refreshes
@@ -36,7 +36,7 @@ of what was there before (or use \`git diff .reins/constraints.yaml\`).
 For each change:
 
 - **Newly added constraints (\`source: auto\`)**: scrutinize them with
-  the same rigor as Phase 0 of \`/reins-setup\`. Auto-generated rules are
+  the same rigor as Phase 0 of \`/reins:setup\`. Auto-generated rules are
   guesses. Keep the load-bearing ones, delete the rest.
 - **Modified constraints**: usually a scope path got more accurate. Skim
   to confirm.
@@ -105,7 +105,7 @@ Summarize:
   re-anchoring is usually correct. Delete only when the rule itself is
   no longer applicable.
 - Do not invent new project-specific constraints in this workflow. Use
-  \`/reins-add-constraint\` for that.
+  \`/reins:add-constraint\` for that.
 - If \`reins update\` itself errors, do not patch around it — report the
   error to the user.
 `,

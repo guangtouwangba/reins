@@ -273,7 +273,7 @@ export function writeConstraintsFile(
     constraints,
     pipeline: {
       // Left empty at init time. The user populates this via the
-      // /reins-setup slash command, which inspects the real project layout
+      // /reins:setup slash command, which inspects the real project layout
       // (monorepo subpaths, package manager, lint commands) and writes the
       // verbatim shell commands here.
       pre_commit: [],

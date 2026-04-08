@@ -19,7 +19,7 @@ interface CapturedKnowledge {
  * Load `pipeline.pre_commit` commands from constraints.yaml. Returns an empty
  * array when the file is absent, unreadable, or has no pre_commit entries.
  *
- * These commands are written by the AI during `/reins-setup` (see
+ * These commands are written by the AI during `/reins:setup` (see
  * `.reins/SETUP.prompt.md`). The gate is intentionally dumb: it does not
  * guess what to run based on package.json, monorepo layout, or stack
  * detection. If you want verification at Stop, configure it in
@@ -69,7 +69,7 @@ export async function gateStop(projectRoot: string, _input: GateInput): Promise<
 
   // 1. L0 verification — run whatever pipeline.pre_commit specifies, verbatim.
   //
-  // If the user (or `/reins-setup`) hasn't populated pre_commit yet, we run
+  // If the user (or `/reins:setup`) hasn't populated pre_commit yet, we run
   // nothing. That's deliberate: we'd rather let agents keep working than
   // false-block on heuristic guesses about lint/typecheck commands.
   if (!gateConfig.stop_skip_lint) {

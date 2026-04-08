@@ -1,8 +1,8 @@
 import type { Workflow } from './types.js';
 
 export const setupWorkflow: Workflow = {
-  id: 'reins-setup',
-  name: 'reins-setup',
+  id: 'setup',
+  name: 'setup',
   description: 'Finish Reins configuration after init — fill pipeline.pre_commit and add project-specific constraints.',
   body: `Reins has scanned this repo and laid down a skeleton in \`.reins/\`, but
 left project-specific fields empty because they need real codebase

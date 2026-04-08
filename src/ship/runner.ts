@@ -105,7 +105,7 @@ export async function runFeature(
 
   // Transition to in-progress. The ship orchestrator already picked this
   // feature, but runFeature owns the transition because it may be called
-  // directly by /reins-ship-here or tests.
+  // directly by /reins:ship-here or tests.
   safeUpdateFrontmatter(ctx.featurePath, { status: 'in-progress', last_run_id: ctx.runId });
 
   let previousFailure: FailureContext | undefined;

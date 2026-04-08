@@ -27,7 +27,7 @@ export interface PipelineConfig {
   /**
    * Shell commands the gate-stop hook runs verbatim with cwd = repo root.
    * If any command exits non-zero, the Stop hook blocks the turn.
-   * Populated by the user via the /reins-setup slash command after init.
+   * Populated by the user via the /reins:setup slash command after init.
    * Runs at EVERY Claude Code turn — keep it sub-60s (lint, typecheck).
    */
   pre_commit: string[];

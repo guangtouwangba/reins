@@ -11,7 +11,7 @@
  * context, instead of the CLI trying to spawn its own LLM.
  */
 export interface Workflow {
-  /** Slash command id — used as the filename. E.g. "reins-setup". */
+  /** Slash command id — used as the filename. E.g. "setup". */
   id: string;
   /** Display name shown in the IDE command palette. */
   name: string;

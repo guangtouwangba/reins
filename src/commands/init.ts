@@ -187,7 +187,7 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
     },
     constraints,
     pipeline: {
-      // Left empty at init time. Filled by /reins-setup slash command.
+      // Left empty at init time. Filled by /reins:setup slash command.
       pre_commit: [],
     },
   };
@@ -258,7 +258,7 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   console.log(`  ✓ ${hookConfigs.length} hooks generated`);
 
   // 8b. Create empty feature queue directory so `reins ship` and
-  // `/reins-feature-new` have a stable place to drop feature files.
+  // `/reins:feature-new` have a stable place to drop feature files.
   mkdirSync(join(projectRoot, '.reins', 'features'), { recursive: true });
 
   // Skill indexing
@@ -287,17 +287,20 @@ export async function initCommand(projectRoot: string, options: InitOptions): Pr
   console.log('  Next: open your AI coding tool (Claude Code, Cursor, …) in');
   console.log('  this repo and run the slash command:');
   console.log('');
-  console.log('    /reins-setup');
+  console.log('    /reins:setup');
   console.log('');
   console.log('  It will read the project, fill in pipeline.pre_commit, and');
   console.log('  add 5-8 project-specific constraints. The CLI does not call');
   console.log('  any LLM — your IDE does the work, with full project context.');
   console.log('');
   console.log('  Other slash commands now available in your IDE:');
-  console.log('    /reins-add-constraint  — add a new rule by description');
-  console.log('    /reins-verify          — run pre_commit checks on demand');
-  console.log('    /reins-learn           — propose changes from violation history');
-  console.log('    /reins-update          — refresh after project structure changes');
+  console.log('    /reins:add-constraint  — add a new rule by description');
+  console.log('    /reins:verify          — run pre_commit checks on demand');
+  console.log('    /reins:learn           — propose changes from violation history');
+  console.log('    /reins:update          — refresh after project structure changes');
+  console.log('    /reins:feature-new     — draft a feature for the ship queue');
+  console.log('    /reins:ship            — batch-run queued features end to end');
+  console.log('    /reins:ship-here       — run a single feature interactively (debug)');
   console.log('');
   console.log('  CLI commands:');
   console.log('    reins status   — view constraint summary');

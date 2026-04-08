@@ -1,8 +1,8 @@
 import type { Workflow } from './types.js';
 
 export const featureNewWorkflow: Workflow = {
-  id: 'reins-feature-new',
-  name: 'reins-feature-new',
+  id: 'feature-new',
+  name: 'feature-new',
   description: 'Interactively draft a new feature file under .reins/features/ for the ship queue.',
   body: `Draft a new feature for the \`reins ship\` queue. This workflow gathers
 intent and acceptance criteria from the user interactively, then writes a

@@ -1,8 +1,8 @@
 import type { Workflow } from './types.js';
 
 export const verifyWorkflow: Workflow = {
-  id: 'reins-verify',
-  name: 'reins-verify',
+  id: 'verify',
+  name: 'verify',
   description: 'Run the pipeline.pre_commit verification chain on demand and explain any failures.',
   body: `Run the verification commands Reins enforces at Stop time, and explain
 any failures so the user can fix them before the gate-stop hook blocks
@@ -15,7 +15,7 @@ their next turn.
 Read \`.reins/constraints.yaml\` and extract the \`pipeline.pre_commit\`
 array. If it's empty, tell the user:
 
-> "No verification commands configured. Run \`/reins-setup\` first to
+> "No verification commands configured. Run \`/reins:setup\` first to
 > populate \`pipeline.pre_commit\`."
 
 …and stop.
@@ -64,7 +64,7 @@ For the failing command:
    - **(b) Fix the constraint** — if the failure is because the command
      itself is wrong (e.g. lint config moved, command renamed in
      package.json), propose updating \`pipeline.pre_commit\` instead. Use
-     \`/reins-setup\` semantics to validate the new command.
+     \`/reins:setup\` semantics to validate the new command.
 4. Wait for the user's decision before doing anything destructive.
 
 ---

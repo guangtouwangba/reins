@@ -5,6 +5,7 @@ import { verifyWorkflow } from './verify.js';
 import { learnWorkflow } from './learn.js';
 import { updateWorkflow } from './update.js';
 import { featureNewWorkflow } from './feature-new.js';
+import { shipWorkflow } from './ship.js';
 import { shipHereWorkflow } from './ship-here.js';
 
 export type { Workflow } from './types.js';
@@ -24,6 +25,7 @@ export function getWorkflows(): Workflow[] {
     learnWorkflow,
     updateWorkflow,
     featureNewWorkflow,
+    shipWorkflow,
     shipHereWorkflow,
   ];
 }

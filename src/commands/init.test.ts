@@ -74,8 +74,8 @@ describe('initCommand', () => {
       expect(content).toContain(workflow.body.split('\n')[0]);
     }
 
-    // Phase 2B adds feature-new + ship-here for a total of 7.
-    expect(workflows.length).toBe(7);
+    // setup, add-constraint, verify, learn, update, feature-new, ship, ship-here.
+    expect(workflows.length).toBe(8);
   });
 
   it('creates an empty .reins/features/ directory for the ship queue', async () => {

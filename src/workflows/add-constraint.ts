@@ -1,8 +1,8 @@
 import type { Workflow } from './types.js';
 
 export const addConstraintWorkflow: Workflow = {
-  id: 'reins-add-constraint',
-  name: 'reins-add-constraint',
+  id: 'add-constraint',
+  name: 'add-constraint',
   description: 'Add a new constraint to .reins/constraints.yaml from a natural-language rule.',
   body: `Add a new constraint to \`.reins/constraints.yaml\` based on what the user
 describes. Reins itself never asks an LLM to do this — *you* are the LLM,

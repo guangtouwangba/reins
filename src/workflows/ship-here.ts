@@ -1,8 +1,8 @@
 import type { Workflow } from './types.js';
 
 export const shipHereWorkflow: Workflow = {
-  id: 'reins-ship-here',
-  name: 'reins-ship-here',
+  id: 'ship-here',
+  name: 'ship-here',
   description: 'Implement a single feature in the current IDE session (foreground, no headless spawn). Debug-friendly alternative to `reins ship`.',
   body: `Work on a single feature from \`.reins/features/\` **in this very IDE
 session** — no headless \`claude -p\` subprocess, no parallel worktrees,

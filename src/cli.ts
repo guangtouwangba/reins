@@ -64,7 +64,7 @@ program
 program
   .command('analyze')
   .description('Analyze execution history and surface improvement suggestions')
-  .option('--json', 'Emit the full analysis as JSON (used by /reins-learn)')
+  .option('--json', 'Emit the full analysis as JSON (used by /reins:learn)')
   .action(async (options) => {
     const { analyzeExecutions } = await import('./learn/analyzer.js');
     const projectRoot = process.cwd();

@@ -122,10 +122,10 @@ export async function runHook(action: string | undefined, args: string[]): Promi
       // inference, severity calibration, grounding evidence). The CLI no
       // longer ships an LLM — that work belongs in the user's IDE, where
       // there is full project context. Point them at the slash command.
-      console.log('`reins hook add` has been replaced by the /reins-add-constraint slash');
+      console.log('`reins hook add` has been replaced by the /reins:add-constraint slash');
       console.log('command. Open Claude Code or Cursor in this repo and run:');
       console.log('');
-      console.log('  /reins-add-constraint');
+      console.log('  /reins:add-constraint');
       console.log('');
       console.log('The slash command validates the rule against project context, picks a');
       console.log('scope and severity, and writes constraints.yaml safely.');
@@ -136,7 +136,7 @@ export async function runHook(action: string | undefined, args: string[]): Promi
         console.log('');
       }
       console.log('Usage: reins hook <list|disable> [args...]');
-      console.log('       (To add a constraint, use /reins-add-constraint in your IDE.)');
+      console.log('       (To add a constraint, use /reins:add-constraint in your IDE.)');
       break;
   }
 }
